@@ -39,7 +39,8 @@ The `statecharts-ts` library brings these powerful concepts to TypeScript, allow
 - **Event Handling**: Send events to trigger state transitions.
 - **Subscription Mechanism**: Subscribe to state changes to react to transitions in your application.
 
-## Installation
+<!--
+## Installation (coming soon!)
 
 You can install `statecharts-ts` via [npm](https://www.npmjs.com/):
 
@@ -52,6 +53,7 @@ Or using [yarn](https://yarnpkg.com/):
 ```bash
 yarn add statecharts-ts
 ```
+-->
 
 ## Getting Started
 
