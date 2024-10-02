@@ -4,7 +4,7 @@
 ![Version](https://img.shields.io/npm/v/statecharts-ts)
 ![Downloads](https://img.shields.io/npm/dt/statecharts-ts)
 
-`statecharts-ts` is a TypeScript library that provides a flexible and powerful way to create and manage state machines (statecharts) in your applications. Inspired by the [Statecharts](https://en.wikipedia.org/wiki/State_machine#Statecharts) formalism introduced by David Harel, this library allows you to model complex behaviors with ease, leveraging TypeScript's type safety and modern JavaScript features.
+`statecharts-ts` is a TypeScript library that provides a flexible and powerful way to create and manage state machines (statecharts) in your applications. Inspired by the [Statecharts](https://statecharts.dev/) formalism introduced by David Harel, this library allows you to model complex behaviors with ease, leveraging TypeScript's type safety and modern JavaScript features.
 
 ## Table of Contents
 
@@ -16,6 +16,12 @@
   - [Creating a State Machine](#creating-a-state-machine)
   - [Handling Transitions](#handling-transitions)
   - [Subscribing to State Changes](#subscribing-to-state-changes)
+- [Advanced Features](#advanced-features)
+  - [Guards (Conditional Transitions)](#guards-conditional-transitions)
+  - [Entry and Exit Actions](#entry-and-exit-actions)
+  - [Asynchronous Actions](#asynchronous-actions)
+  - [Delayed Transitions with Dynamic Timing](#delayed-transitions-with-dynamic-timing)
+  - [Error Handling](#error-handling)
 - [Examples](#examples)
   - [Media Player State Machine](#media-player-state-machine)
   - [Casio F-91W Quartz Watch Model](#casio-f-91w-quartz-watch-model)
@@ -35,12 +41,16 @@ The `statecharts-ts` library brings these powerful concepts to TypeScript, allow
 - **Type Safety**: Leverage TypeScript's type system to define states, events, and context with precision.
 - **Hierarchical States**: Organize states in a nested structure for better manageability.
 - **Parallel States**: Support for concurrent states to model independent state machines running in parallel.
-- **Transitions with Actions**: Define actions that execute during state transitions to modify context or trigger side effects.
+- **Guards (Conditional Transitions)**: Define conditions that must be met for transitions to occur.
+- **Entry and Exit Actions**: Execute actions when entering or exiting states.
+- **Asynchronous Actions**: Support for asynchronous operations within actions and state entry/exit.
+- **Delayed Transitions with Dynamic Timing**: Schedule transitions to occur after a delay, with timing based on context.
+- **Error Handling**: Gracefully handle errors during transitions and actions.
 - **Event Handling**: Send events to trigger state transitions.
 - **Subscription Mechanism**: Subscribe to state changes to react to transitions in your application.
+- **Serialization and Deserialization**: Save and restore the state and context of your state machines.
 
-<!--
-## Installation (coming soon!)
+## Installation
 
 You can install `statecharts-ts` via [npm](https://www.npmjs.com/):
 
@@ -53,7 +63,6 @@ Or using [yarn](https://yarnpkg.com/):
 ```bash
 yarn add statecharts-ts
 ```
--->
 
 ## Getting Started
 
@@ -84,7 +93,7 @@ Use the `Machine` class to create a state machine by providing a state definitio
 import { Machine, StateDefinition } from 'statecharts-ts';
 
 // Define the state machine structure
-const trafficLightDefinition: StateDefinition<TrafficLightState, TrafficLightEvent, TrafficLightContext> = {
+const trafficLightDefinition: StateDefinition<TrafficLightEvent, TrafficLightContext> = {
   initial: 'red',
   states: {
     red: {
@@ -112,7 +121,7 @@ const trafficLightDefinition: StateDefinition<TrafficLightState, TrafficLightEve
 const trafficLightContext: TrafficLightContext = {};
 
 // Create the state machine instance
-const trafficLightMachine = new Machine<TrafficLightState, TrafficLightEvent, TrafficLightContext>(
+const trafficLightMachine = new Machine<TrafficLightEvent, TrafficLightContext>(
   trafficLightDefinition,
   trafficLightContext,
   [trafficLightDefinition.initial!]
@@ -131,9 +140,9 @@ trafficLightMachine.onTransition((states) => {
 });
 
 // Send events to transition states
-trafficLightMachine.send({ type: 'TIMER' });      // red -> green
-trafficLightMachine.send({ type: 'TIMER' });      // green -> yellow
-trafficLightMachine.send({ type: 'EMERGENCY' });  // yellow -> red (with emergency)
+await trafficLightMachine.send({ type: 'TIMER' });      // red -> green
+await trafficLightMachine.send({ type: 'TIMER' });      // green -> yellow
+await trafficLightMachine.send({ type: 'EMERGENCY' });  // yellow -> red (with emergency)
 ```
 
 ### Subscribing to State Changes
@@ -146,30 +155,102 @@ trafficLightMachine.onTransition((states) => {
 });
 
 // To unsubscribe
-const callback = (states: TrafficLightState[]) => {
+const callback = (states: string[]) => {
   console.log('Another subscriber:', states);
 };
 trafficLightMachine.onTransition(callback);
 trafficLightMachine.offTransition(callback);
 ```
 
+## Advanced Features
+
+### Guards (Conditional Transitions)
+
+Guards are conditions that determine whether a transition should occur based on the current context or event data.
+
+```typescript
+transitions: {
+  PLAY: {
+    target: 'playing',
+    cond: (context, event) => context.connectionType === 'WiFi',
+    action: (context, event) => { /* ... */ },
+  },
+},
+```
+
+### Entry and Exit Actions
+
+Define actions to execute when entering or exiting a state.
+
+```typescript
+states: {
+  playing: {
+    onEntry: async (context) => {
+      console.log('Started playing');
+      await fetchData();
+    },
+    onExit: (context) => {
+      console.log('Stopped playing');
+    },
+    /* ... */
+  },
+},
+```
+
+### Asynchronous Actions
+
+Support asynchronous operations within actions and state entry/exit functions.
+
+```typescript
+transitions: {
+  LOAD_DATA: {
+    target: 'loading',
+    action: async (context, event) => {
+      context.data = await fetchDataFromAPI();
+    },
+  },
+},
+```
+
+### Delayed Transitions with Dynamic Timing
+
+Schedule transitions to occur after a delay, with timing based on the context or event data.
+
+```typescript
+after: [
+  {
+    delay: (context) => context.delayDuration,
+    transition: {
+      target: 'paused',
+      action: (context) => {
+        console.log('Auto-pausing after delay');
+      },
+    },
+  },
+],
+```
+
+### Error Handling
+
+Gracefully handle errors during transitions and actions by implementing the `handleError` method.
+
+```typescript
+private async handleError(error: any, state: string, event?: TEvent): Promise<void> {
+  console.error(`Error in state "${state}":`, error);
+  // Implement custom error handling logic here
+}
+```
+
 ## Examples
 
 ### Media Player State Machine
 
-The following example demonstrates a media player state machine with parallel and nested states, including playback and network states.
+The following example demonstrates a media player state machine with parallel and nested states, including playback and network states. It utilizes advanced features like guards, entry/exit actions, asynchronous actions, and delayed transitions.
 
 ```typescript
 import { Machine, StateDefinition } from 'statecharts-ts';
 
-// Define states, events, and context
-type MediaPlayerState =
-  | 'playback.stopped'
-  | 'playback.playing'
-  | 'playback.paused'
-  | 'network.connected'
-  | 'network.disconnected';
-
+// Define events, context, and state definition
 type MediaPlayerEvent =
   | { type: 'PLAY'; data?: { trackId: string; trackName: string } }
   | { type: 'PAUSE' }
@@ -181,29 +262,50 @@ interface MediaPlayerContext {
   currentTrackId?: string;
   currentTrackName?: string;
   connectionType?: string;
+  volume: number;
+  delayDuration: number;
 }
 
-// Define the state machine
-const mediaPlayerDefinition: StateDefinition<MediaPlayerState, MediaPlayerEvent, MediaPlayerContext> = {
+const mediaPlayerMachineDefinition: StateDefinition<MediaPlayerEvent, MediaPlayerContext> = {
   parallel: true,
   states: {
     playback: {
       initial: 'stopped',
       states: {
         stopped: {
+          onEntry: async (context) => {
+            console.log('Entering stopped state');
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            console.log('Stopped state ready');
+          },
           transitions: {
             PLAY: {
               target: 'playback.playing',
-              action: (context, event) => {
+              cond: (context) => context.connectionType === 'WiFi',
+              action: async (context, event) => {
                 if (event.type === 'PLAY' && event.data) {
                   context.currentTrackId = event.data.trackId;
                   context.currentTrackName = event.data.trackName;
+                  console.log(`Loading track ${context.currentTrackName}`);
+                  await new Promise((resolve) => setTimeout(resolve, 1000));
+                  console.log('Track loaded');
                 }
               },
             },
           },
         },
         playing: {
+          after: [
+            {
+              delay: (context) => context.delayDuration,
+              transition: {
+                target: 'playback.paused',
+                action: (context) => {
+                  console.log('Auto-pausing after delay');
+                },
+              },
+            },
+          ],
           transitions: {
             PAUSE: { target: 'playback.paused' },
             STOP: {
@@ -211,6 +313,7 @@ const mediaPlayerDefinition: StateDefinition<MediaPlayerState, MediaPlayerEvent,
               action: (context) => {
                 context.currentTrackId = undefined;
                 context.currentTrackName = undefined;
+                console.log('Playback stopped');
               },
             },
           },
@@ -223,6 +326,7 @@ const mediaPlayerDefinition: StateDefinition<MediaPlayerState, MediaPlayerEvent,
               action: (context) => {
                 context.currentTrackId = undefined;
                 context.currentTrackName = undefined;
+                console.log('Playback stopped');
               },
             },
           },
@@ -239,6 +343,7 @@ const mediaPlayerDefinition: StateDefinition<MediaPlayerState, MediaPlayerEvent,
               action: (context, event) => {
                 if (event.type === 'CONNECT' && event.data) {
                   context.connectionType = event.data.connectionType;
+                  console.log(`Connected via ${context.connectionType}`);
                 }
               },
             },
@@ -250,6 +355,7 @@ const mediaPlayerDefinition: StateDefinition<MediaPlayerState, MediaPlayerEvent,
               target: 'network.disconnected',
               action: (context) => {
                 context.connectionType = undefined;
+                console.log('Disconnected from network');
               },
             },
           },
@@ -259,14 +365,17 @@ const mediaPlayerDefinition: StateDefinition<MediaPlayerState, MediaPlayerEvent,
   },
 };
 
-// Initialize context
-const mediaPlayerContext: MediaPlayerContext = {};
+const initialStates: string[] = ['playback', 'network'];
+const mediaPlayerContext: MediaPlayerContext = {
+  volume: 50,
+  delayDuration: 5000, // 5 seconds delay
+};
 
 // Create the state machine instance
-const mediaPlayerMachine = new Machine<MediaPlayerState, MediaPlayerEvent, MediaPlayerContext>(
-  mediaPlayerDefinition,
+const mediaPlayerMachine = new Machine<MediaPlayerEvent, MediaPlayerContext>(
+  mediaPlayerMachineDefinition,
   mediaPlayerContext,
-  ['playback', 'network']
+  initialStates
 );
 
 // Subscribe to transitions
@@ -276,11 +385,11 @@ mediaPlayerMachine.onTransition((states) => {
 });
 
 // Trigger events
-mediaPlayerMachine.send({ type: 'CONNECT', data: { connectionType: 'WiFi' } });
-mediaPlayerMachine.send({ type: 'PLAY', data: { trackId: '123', trackName: 'My Song' } });
-mediaPlayerMachine.send({ type: 'PAUSE' });
-mediaPlayerMachine.send({ type: 'STOP' });
-mediaPlayerMachine.send({ type: 'DISCONNECT' });
+(async () => {
+  await mediaPlayerMachine.send({ type: 'CONNECT', data: { connectionType: 'WiFi' } });
+  await mediaPlayerMachine.send({ type: 'PLAY', data: { trackId: '123', trackName: 'My Song' } });
+  // Wait for the auto-pause after delay
+})();
 ```
 
 ### Casio F-91W Quartz Watch Model
@@ -308,11 +417,11 @@ interface WatchContext {
 }
 
 // Define the state machine
-const watchMachineDefinition: StateDefinition<WatchEvent, WatchContext, WatchContext> = {
+const watchMachineDefinition: StateDefinition<WatchEvent, WatchContext> = {
   initial: 'timekeeping',
   states: {
     timekeeping: {
-      enter: (context) => {
+      onEntry: (context) => {
         console.log('Entered Timekeeping Mode');
       },
       transitions: {
@@ -327,7 +436,7 @@ const watchMachineDefinition: StateDefinition<WatchEvent, WatchContext, WatchCon
       },
     },
     alarm: {
-      enter: (context) => {
+      onEntry: (context) => {
         console.log('Entered Alarm Mode');
       },
       transitions: {
@@ -349,7 +458,7 @@ const watchMachineDefinition: StateDefinition<WatchEvent, WatchContext, WatchCon
       },
     },
     stopwatch: {
-      enter: (context) => {
+      onEntry: (context) => {
         console.log('Entered Stopwatch Mode');
       },
       transitions: {
@@ -375,14 +484,13 @@ const watchMachineDefinition: StateDefinition<WatchEvent, WatchContext, WatchCon
       },
     },
     timeSetting: {
-      enter: (context) => {
+      onEntry: (context) => {
         console.log('Entered Time Setting Mode');
       },
       transitions: {
         PRESS_C: {
           target: 'timeSetting',
           action: (context) => {
-            // Adjust minutes
             context.time.setMinutes(context.time.getMinutes() + 1);
             console.log(`Time Adjusted: ${context.time.toLocaleTimeString()}`);
           },
@@ -392,14 +500,13 @@ const watchMachineDefinition: StateDefinition<WatchEvent, WatchContext, WatchCon
       },
     },
     dateSetting: {
-      enter: (context) => {
+      onEntry: (context) => {
         console.log('Entered Date Setting Mode');
       },
       transitions: {
         PRESS_C: {
           target: 'dateSetting',
           action: (context) => {
-            // Adjust day
             context.time.setDate(context.time.getDate() + 1);
             console.log(`Date Adjusted: ${context.time.toLocaleDateString()}`);
           },
@@ -422,7 +529,7 @@ const watchContext: WatchContext = {
 };
 
 // Create the state machine instance
-const watchMachine = new Machine<WatchEvent, WatchContext, WatchContext>(
+const watchMachine = new Machine<WatchEvent, WatchContext>(
   watchMachineDefinition,
   watchContext,
   [watchMachineDefinition.initial!]
@@ -457,17 +564,16 @@ A generic state machine class for creating and managing statecharts.
 
 #### Type Parameters
 
-- `TState`: A string union representing state names.
 - `TEvent`: A type for events, which must include a `type` property and can have additional data.
 - `TContext`: A type representing the state machine's context or data.
 
 #### Constructor
 
 ```typescript
-new Machine<TState, TEvent, TContext>(
-  stateDefinition: StateDefinition<TState, TEvent, TContext>,
+new Machine<TEvent, TContext>(
+  stateDefinition: StateDefinition<TEvent, TContext>,
   context: TContext,
-  initialStates: TState[]
+  initialStates: string[]
 )
 ```
 
@@ -477,33 +583,40 @@ new Machine<TState, TEvent, TContext>(
 
 #### Methods
 
-- **`send(event: TEvent): void`**  
+- **`send(event: TEvent): Promise<void>`**  
   Triggers a transition based on the current state and the event.
 
-- **`getState(): TState[]`**  
+- **`getState(): string[]`**  
   Returns the current state(s) of the machine.
 
 - **`getContext(): TContext`**  
   Returns the current context of the machine.
 
-- **`onTransition(callback: (state: TState[]) => void): void`**  
+- **`onTransition(callback: (state: string[]) => void): void`**  
   Subscribes to state transitions with a callback function.
 
-- **`offTransition(callback: (state: TState[]) => void): void`**  
+- **`offTransition(callback: (state: string[]) => void): void`**  
   Unsubscribes a previously subscribed callback from state transitions.
+
+- **`serialize(): string`**  
+  Serializes the current state(s) and context of the machine.
+
+- **`static parse(serializedData: string, stateDefinition: StateDefinition<TEvent, TContext>): Machine<TEvent, TContext>`**  
+  Parses the serialized data and restores the machine's state(s) and context.
 
 ### `StateDefinition` Type
 
 Defines the structure and behavior of states within the state machine.
 
 ```typescript
-type StateDefinition<TState extends string, TEvent, TContext> = {
-  initial?: TState;
+type StateDefinition<TEvent extends { type: string }, TContext> = {
+  initial?: string;
   parallel?: boolean;
-  states?: Record<TState, StateDefinition<TState, TEvent, TContext>>;
-  transitions?: Record<string, Transition<TState, TEvent, TContext>>;
-  enter?: (context: TContext, send: (event: TEvent) => void) => void;
-  after?: Record<number, Transition<TState, TEvent, TContext>>;
+  states?: Record<string, StateDefinition<TEvent, TContext>>;
+  transitions?: Record<string, Transition<TContext, TEvent>>;
+  onEntry?: (context: TContext, event?: TEvent) => void | Promise<void>;
+  onExit?: (context: TContext, event?: TEvent) => void | Promise<void>;
+  after?: AfterTransition<TContext, TEvent>[];
 };
 ```
 
@@ -512,9 +625,21 @@ type StateDefinition<TState extends string, TEvent, TContext> = {
 Defines a state transition.
 
 ```typescript
-type Transition<TState extends string, TEvent, TContext> = {
-  target: TState | TState[];
-  action?: (context: TContext, event: TEvent) => void;
+type Transition<TContext, TEvent> = {
+  target: string | string[];
+  action?: (context: TContext, event: TEvent) => void | Promise<void>;
+  cond?: (context: TContext, event: TEvent) => boolean | Promise<boolean>;
+};
+```
+
+### `AfterTransition` Type
+
+Defines a delayed transition.
+
+```typescript
+type AfterTransition<TContext, TEvent> = {
+  delay: number | ((context: TContext, event?: TEvent) => number);
+  transition: Transition<TContext, TEvent>;
 };
 ```
 
@@ -524,6 +649,7 @@ type Transition<TState extends string, TEvent, TContext> = {
 - [Statecharts in Software Engineering](https://www.cs.cmu.edu/~mleone/courses/15-817-f11/slides/statecharts.pdf)
 - [xstate](https://xstate.js.org/docs/) - A popular state machine library for JavaScript/TypeScript.
 - [David Harel's Original Paper on Statecharts](https://www.cs.tau.ac.il/~stoledo/courses/2003_1/statechart.pdf)
+- [The World of Statecharts](https://statecharts.dev)
 
 ## Contributing
 

@@ -1,12 +1,23 @@
-export type Transition<TContext, TEvent> = {
+// machine.ts
+
+type Guard<TContext, TEvent> = (context: TContext, event: TEvent) => boolean | Promise<boolean>;
+
+type Transition<TContext, TEvent> = {
   target: string | string[];
-  action?: (context: TContext, event: TEvent) => void;
+  action?: (context: TContext, event: TEvent) => void | Promise<void>;
+  cond?: Guard<TContext, TEvent>;
+};
+
+type AfterTransition<TContext, TEvent> = {
+  delay: number | ((context: TContext, event?: TEvent) => number);
+  transition: Transition<TContext, TEvent>;
 };
 
 export type StateDefinition<TEvent extends { type: string }, TContext> = {
   transitions?: Record<string, Transition<TContext, TEvent>>;
-  enter?: (context: TContext, send: (event: TEvent) => void) => void;
-  after?: Record<number, Transition<TContext, TEvent>>;
+  onEntry?: (context: TContext, event?: TEvent) => void | Promise<void>;
+  onExit?: (context: TContext, event?: TEvent) => void | Promise<void>;
+  after?: AfterTransition<TContext, TEvent>[];
   states?: Record<string, StateDefinition<TEvent, TContext>>;
   parallel?: boolean;
   initial?: string;
@@ -31,50 +42,72 @@ export class Machine<TEvent extends { type: string }, TContext> {
     this.enterStates(initialStates);
   }
 
-  send(event: TEvent): void {
+  async send(event: TEvent): Promise<void> {
     const nextStates: Set<string> = new Set();
     const exitedStates: Set<string> = new Set();
+    const transitionsToExecute: Array<{
+      transition: Transition<TContext, TEvent>;
+      state: string;
+    }> = [];
 
-    // For each current state, check for transitions
-    this.currentStates.forEach((state) => {
+    for (const state of this.currentStates) {
       const stateDef = this.getStateDefinition(state);
-      if (!stateDef) return;
+      if (!stateDef) continue;
 
-      const transition =
-        stateDef.transitions && stateDef.transitions[event.type];
+      const transition = stateDef.transitions && stateDef.transitions[event.type];
       if (transition) {
-        // Run action if any
-        if (transition.action) {
-          transition.action(this.context, event);
+        // Evaluate guard condition if present
+        let canTransition = true;
+        if (transition.cond) {
+          canTransition = await transition.cond(this.context, event);
         }
-
-        // Exiting current state
-        exitedStates.add(state);
-
-        // Add target states
-        const targets = Array.isArray(transition.target)
-          ? transition.target
-          : [transition.target];
-        targets.forEach((targetState) => {
-          nextStates.add(targetState);
-        });
+        if (canTransition) {
+          transitionsToExecute.push({ transition, state });
+        } else {
+          nextStates.add(state);
+        }
       } else {
-        // No transition, remain in current state
         nextStates.add(state);
       }
-    });
+    }
+
+    // Execute transitions
+    for (const { transition, state } of transitionsToExecute) {
+      // Exit current state
+      exitedStates.add(state);
+
+      // Run exit action
+      await this.executeStateExit(state, event);
+
+      // Run transition action if any
+      if (transition.action) {
+        try {
+          await transition.action(this.context, event);
+        } catch (error) {
+          await this.handleError(error, state, event);
+          return;
+        }
+      }
+
+      // Add target states
+      const targets = Array.isArray(transition.target)
+        ? transition.target
+        : [transition.target];
+      targets.forEach((targetState) => {
+        nextStates.add(targetState);
+      });
+    }
 
     // Update currentStates
     this.currentStates = nextStates;
 
     // Exit states
-    exitedStates.forEach((state) => {
-      // Cancel any after timers
+    for (const state of exitedStates) {
       this.cancelTimersForState(state);
-    });
+    }
 
     // Enter new states
-    this.enterStates(Array.from(nextStates));
+    await this.enterStates(Array.from(nextStates), event);
 
     // Notify subscribers
     this.notifySubscribers();
@@ -96,14 +129,40 @@ export class Machine<TEvent extends { type: string }, TContext> {
     this.subscribers = this.subscribers.filter((cb) => cb !== callback);
   }
 
+  /**
+   * Serializes the current state(s) and context of the machine.
+   */
+  serialize(): string {
+    const data = {
+      currentStates: Array.from(this.currentStates),
+      context: this.context,
+    };
+    return JSON.stringify(data);
+  }
+
+  /**
+   * Parses the serialized data and restores the machine's state(s) and context.
+   * Note: The stateDefinition must be the same as when the machine was serialized.
+   */
+  static parse<TEvent extends { type: string }, TContext>(
+    serializedData: string,
+    stateDefinition: StateDefinition<TEvent, TContext>
+  ): Machine<TEvent, TContext> {
+    const data = JSON.parse(serializedData);
+    const machine = new Machine<TEvent, TContext>(
+      stateDefinition,
+      data.context,
+      data.currentStates
+    );
+    return machine;
+  }
+
   private notifySubscribers(): void {
     const currentStatesArray = Array.from(this.currentStates);
     this.subscribers.forEach((callback) => callback(currentStatesArray));
   }
 
-  private getStateDefinition(
-    statePath: string
-  ): StateDefinition<TEvent, TContext> | undefined {
+  private getStateDefinition(statePath: string): StateDefinition<TEvent, TContext> | undefined {
     const pathSegments = statePath.split('.');
     let currentStateDef = this.stateDefinition;
     for (const segment of pathSegments) {
@@ -116,37 +175,53 @@ export class Machine<TEvent extends { type: string }, TContext> {
     return currentStateDef;
   }
 
-  private enterStates(states: string[]): void {
-    states.forEach((statePath) => {
+  private async enterStates(states: string[], event?: TEvent): Promise<void> {
+    for (const statePath of states) {
       const stateDef = this.getStateDefinition(statePath);
       if (stateDef) {
         // Add state to currentStates
         this.currentStates.add(statePath);
 
-        // Run enter function if any
-        if (stateDef.enter) {
-          stateDef.enter(this.context, this.send.bind(this));
+        // Run onEntry action if any
+        if (stateDef.onEntry) {
+          try {
+            await stateDef.onEntry(this.context, event);
+          } catch (error) {
+            await this.handleError(error, statePath, event);
+            return;
+          }
         }
 
         // Handle after (delayed transitions)
         if (stateDef.after) {
-          for (const delay in stateDef.after) {
-            const ms = parseInt(delay, 10);
-            const transition = stateDef.after[ms];
-            const timerId = setTimeout(() => {
+          for (const afterTransition of stateDef.after) {
+            const { delay, transition } = afterTransition;
+            let delayMs: number;
+
+            if (typeof delay === 'function') {
+              delayMs = delay(this.context, event);
+            } else {
+              delayMs = delay;
+            }
+
+            const timerId = setTimeout(async () => {
               // Run action if any
               if (transition.action) {
-                transition.action(this.context, { type: 'after' } as TEvent);
+                try {
+                  await transition.action(this.context, { type: 'after' } as TEvent);
+                } catch (error) {
+                  await this.handleError(error, statePath, event);
+                  return;
+                }
               }
               // Add target states
               const targets = Array.isArray(transition.target)
                 ? transition.target
                 : [transition.target];
-              targets.forEach((targetState) => {
-                this.currentStates.add(targetState);
-              });
+              this.currentStates = new Set(targets);
+              await this.enterStates(targets);
               this.notifySubscribers();
-            }, ms);
+            }, delayMs);
             // Store timer to cancel if needed
             this.timers.set(timerId as unknown as number, timerId);
           }
@@ -155,25 +230,41 @@ export class Machine<TEvent extends { type: string }, TContext> {
         // If parallel, enter all child states
         if (stateDef.parallel && stateDef.states) {
           const subStateNames = Object.keys(stateDef.states);
-          const subStatePaths = subStateNames.map(
-            (name) => `${statePath}.${name}`
-          );
-          this.enterStates(subStatePaths);
+          const subStatePaths = subStateNames.map((name) => `${statePath}.${name}`);
+          await this.enterStates(subStatePaths);
         } else if (stateDef.states && stateDef.initial) {
           // Enter initial substate
           const initialSubStatePath = `${statePath}.${stateDef.initial}`;
-          this.enterStates([initialSubStatePath]);
+          await this.enterStates([initialSubStatePath]);
         }
       }
-    });
+    }
+  }
+
+  private async executeStateExit(statePath: string, event?: TEvent): Promise<void> {
+    const stateDef = this.getStateDefinition(statePath);
+    if (stateDef && stateDef.onExit) {
+      try {
+        await stateDef.onExit(this.context, event);
+      } catch (error) {
+        await this.handleError(error, statePath, event);
+      }
+    }
+    // Remove state from currentStates
+    this.currentStates.delete(statePath);
   }
 
   private cancelTimersForState(state: string): void {
-    // Since we didn't store timers per state, we may need to adjust the implementation
-    // For now, we can cancel all timers
+    // Since we didn't store timers per state, we can cancel all timers
     this.timers.forEach((timerId) => {
       clearTimeout(timerId);
     });
     this.timers.clear();
+  }
+
+  private async handleError(error: any, state: string, event?: TEvent): Promise<void> {
+    console.error(`Error in state "${state}":`, error);
+    // Implement error handling strategy, e.g., transition to an error state
+    // For now, we just log the error
   }
 }

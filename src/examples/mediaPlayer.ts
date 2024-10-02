@@ -1,13 +1,6 @@
-import { type StateDefinition, Machine } from '../Machine';
+import { type StateDefinition, Machine } from "../Machine";
 
-/*
-    This example demonstrates the usage of the state machine to model the behavior of a media player.
-
-    The media player has the following modes:
-    - Playback Mode: Allows playing, pausing, and stopping a track.
-    - Network Mode: Allows connecting and disconnecting from a network.
-*/
-
+// Define the events, context, and state definition as before
 type MediaPlayerEvent =
   | { type: 'PLAY'; data?: { trackId: string; trackName: string } }
   | { type: 'PAUSE' }
@@ -15,58 +8,77 @@ type MediaPlayerEvent =
   | { type: 'CONNECT'; data?: { connectionType: string } }
   | { type: 'DISCONNECT' };
 
-type MediaPlayerContext = {
+interface MediaPlayerContext {
   currentTrackId?: string;
   currentTrackName?: string;
   connectionType?: string;
-};
+  volume: number;
+  delayDuration: number;
+}
 
-const mediaPlayerMachineDefinition: StateDefinition<
-  MediaPlayerEvent,
-  MediaPlayerContext
-> = {
+const mediaPlayerMachineDefinition: StateDefinition<MediaPlayerEvent, MediaPlayerContext> = {
   parallel: true,
   states: {
     playback: {
       initial: 'stopped',
       states: {
         stopped: {
+          onEntry: async (context) => {
+            console.log('Entering stopped state');
+            // Simulate an async operation
+            await new Promise((resolve) => setTimeout(resolve, 500));
+            console.log('Stopped state ready');
+          },
           transitions: {
             PLAY: {
               target: 'playback.playing',
-              action: (context, event) => {
+              cond: (context) => context.connectionType === 'WiFi',
+              action: async (context, event) => {
                 if (event.type === 'PLAY' && event.data) {
                   context.currentTrackId = event.data.trackId;
                   context.currentTrackName = event.data.trackName;
+                  console.log(`Loading track ${context.currentTrackName}`);
+                  // Simulate track loading time
+                  await new Promise((resolve) => setTimeout(resolve, 1000));
+                  console.log('Track loaded');
                 }
               },
             },
           },
         },
         playing: {
-          transitions: {
-            PAUSE: {
-              target: 'playback.paused',
+          after: [
+            {
+              delay: (context) => context.delayDuration,
+              transition: {
+                target: 'playback.paused',
+                action: (context) => {
+                  console.log('Auto-pausing after delay');
+                },
+              },
             },
+          ],
+          transitions: {
+            PAUSE: { target: 'playback.paused' },
             STOP: {
               target: 'playback.stopped',
               action: (context) => {
                 context.currentTrackId = undefined;
                 context.currentTrackName = undefined;
+                console.log('Playback stopped');
               },
             },
           },
         },
         paused: {
           transitions: {
-            PLAY: {
-              target: 'playback.playing',
-            },
+            PLAY: { target: 'playback.playing' },
             STOP: {
               target: 'playback.stopped',
               action: (context) => {
                 context.currentTrackId = undefined;
                 context.currentTrackName = undefined;
+                console.log('Playback stopped');
               },
             },
           },
@@ -83,6 +95,7 @@ const mediaPlayerMachineDefinition: StateDefinition<
               action: (context, event) => {
                 if (event.type === 'CONNECT' && event.data) {
                   context.connectionType = event.data.connectionType;
+                  console.log(`Connected via ${context.connectionType}`);
                 }
               },
             },
@@ -94,6 +107,7 @@ const mediaPlayerMachineDefinition: StateDefinition<
               target: 'network.disconnected',
               action: (context) => {
                 context.connectionType = undefined;
+                console.log('Disconnected from network');
               },
             },
           },
@@ -104,26 +118,27 @@ const mediaPlayerMachineDefinition: StateDefinition<
 };
 
 const initialStates: string[] = ['playback', 'network'];
-const mediaPlayerContext: MediaPlayerContext = {};
+const mediaPlayerContext: MediaPlayerContext = {
+  volume: 50,
+  delayDuration: 5000, // 5 seconds delay for dynamic after transition
+};
 
+// Create the state machine instance
 const mediaPlayerMachine = new Machine<MediaPlayerEvent, MediaPlayerContext>(
   mediaPlayerMachineDefinition,
   mediaPlayerContext,
   initialStates
 );
 
-// Demonstrate usage
+// Subscribe to transitions
 mediaPlayerMachine.onTransition((states) => {
-  console.log('Transitioned to states:', states);
-  console.log('Current context:', mediaPlayerMachine.getContext());
+  console.log('Current States:', states);
+  console.log('Context:', mediaPlayerMachine.getContext());
 });
 
-mediaPlayerMachine.send({ type: 'CONNECT', data: { connectionType: 'WiFi' } });
-mediaPlayerMachine.send({
-  type: 'PLAY',
-  data: { trackId: '123', trackName: 'My Song' },
-});
-mediaPlayerMachine.send({ type: 'PAUSE' });
-mediaPlayerMachine.send({ type: 'PLAY' });
-mediaPlayerMachine.send({ type: 'DISCONNECT' });
-mediaPlayerMachine.send({ type: 'STOP' });
+// Trigger events
+(async () => {
+  await mediaPlayerMachine.send({ type: 'CONNECT', data: { connectionType: 'WiFi' } });
+  await mediaPlayerMachine.send({ type: 'PLAY', data: { trackId: '123', trackName: 'My Song' } });
+  // Wait for the auto-pause after delay
+})();

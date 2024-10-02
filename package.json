@@ -6,9 +6,8 @@
   "scripts": {
     "test": "bun test",
     "dev": "bun run --watch index.ts",
-    "demo-auth-machine": "bun run --watch ./examples/authMachine",
-    "demo-door-machine": "bun run --watch ./examples/doorMachine",
-    "demo-robot-machine": "bun run --watch ./examples/robotMachine"
+    "example:casio-watch": "bun run --watch ./src/examples/casioWatch",
+    "example:media-player": "bun run --watch ./src/examples/mediaPlayer",
   },
   "author": "",
   "license": "ISC",
