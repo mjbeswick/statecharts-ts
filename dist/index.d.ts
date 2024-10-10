@@ -1,35 +1,22 @@
 type Action<C> = (context: C) => void;
-type AfterTransition<E extends string, C> = {
+type AfterTransition<C> = {
     delay: number | ((context: C) => number);
-    target: () => StateResult<E, C>;
+    target: () => UnifiedState<C>;
 };
-type OnTransition<E extends string, C> = {
-    [K in E]: {
-        target: () => StateResult<E, C>;
+type OnTransition<C> = {
+    [K: string]: {
+        target: () => UnifiedState<C>;
     };
 };
-type StateDefinition<E extends string, C> = {
-    context: C;
+export type UnifiedState<C> = {
+    send: (event: keyof OnTransition<C>) => void;
+    setState: (state: UnifiedState<C>) => void;
+    context?: C;
     action?: Action<C>;
-    after?: AfterTransition<E, C>;
-    on?: OnTransition<E, C>;
-    initial?: StateResult<E, C>;
-    states?: Record<string, StateResult<E, C>>;
+    after?: AfterTransition<C>;
+    on?: OnTransition<C>;
+    states?: Record<string, UnifiedState<C>>;
+    value?: UnifiedState<C>;
 };
-export type StateMachine<E extends string, C> = {
-    send: (event: E) => void;
-    setState: (state: StateResult<E, C>) => void;
-    value: StateResult<E, C>;
-    context: C;
-};
-export type StateResult<E extends string, C> = {
-    send: (event: E) => void;
-    context: C;
-} & Partial<{
-    setState: (state: StateResult<E, C>) => void;
-    action: Action<C>;
-    after: AfterTransition<E, C>;
-    on: OnTransition<E, C>;
-}>;
-export declare function createState<E extends string, C>(definition: StateDefinition<E, C>): StateMachine<E, C> | StateResult<E, C>;
+export declare function createState<C>(definition: Omit<UnifiedState<C>, 'send' | 'setState'>): UnifiedState<C>;
 export {};
