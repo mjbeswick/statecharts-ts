@@ -19,7 +19,9 @@ export type UnifiedState<C> = {
   after?: AfterTransition<C>;
   on?: OnTransition<C>;
   states?: Record<string, UnifiedState<C>>;
-  value?: UnifiedState<C>;
+  value?: UnifiedState<C>; // For single active child state (non-parallel)
+  activeStates?: Record<string, UnifiedState<C>>; // For parallel states
+  parallel?: boolean; // Indicates whether this state has parallel states
 };
 
 export function createState<C>(
@@ -34,43 +36,82 @@ export function createState<C>(
     on: definition.on,
     states: definition.states,
     value: undefined,
+    activeStates: definition.parallel ? {} : undefined,
+    parallel: definition.parallel,
   };
 
   if (definition.states) {
-    // State machine case
-    state.value = definition.value ?? (null as unknown as UnifiedState<C>);
+    if (state.parallel) {
+      // Initialize each parallel sub-state
+      Object.keys(definition.states).forEach((stateKey) => {
+        const subStateDef = definition.states![stateKey];
+        state.activeStates![stateKey] = createState(subStateDef);
+        state.activeStates![stateKey].context = state.context;
+      });
 
-    // Set state method to change current state in a state machine
-    state.setState = (newState: UnifiedState<C>) => {
-      state.value = newState;
-      if (newState.action) newState.action(state.context!);
-      if (newState.after) {
-        const delay =
-          typeof newState.after.delay === 'function'
-            ? newState.after.delay(state.context!)
-            : newState.after.delay;
-        setTimeout(() => state.setState!(newState.after!.target()), delay);
-      }
-    };
+      // Handle setting parallel states
+      state.setState = (newState: UnifiedState<C>) => {
+        // Parallel state setState only reinitializes parallel states
+        Object.keys(state.activeStates!).forEach((key) => {
+          const activeState = state.activeStates![key];
+          if (activeState.action) activeState.action(state.context!);
+          if (activeState.after) {
+            const delay =
+              typeof activeState.after.delay === 'function'
+                ? activeState.after.delay(state.context!)
+                : activeState.after.delay;
+            setTimeout(
+              () => activeState.setState!(activeState.after!.target()),
+              delay
+            );
+          }
+        });
+      };
 
-    state.send = (event: keyof OnTransition<C>) => {
-      const currentState = state.value;
-      if (currentState?.on && currentState.on[event]) {
-        state.setState(currentState.on[event].target());
-      } else {
-        console.warn(`No transition defined for event '${String(event)}'.`);
-      }
-    };
-
-    if (!definition.value) {
-      throw new Error(
-        "Initial state must be defined when 'states' are provided."
-      );
+      // Handle send for parallel states
+      state.send = (event: keyof OnTransition<C>) => {
+        Object.values(state.activeStates!).forEach((activeState) => {
+          if (activeState.on && activeState.on[event]) {
+            activeState.setState(activeState.on[event].target());
+          }
+        });
+      };
     } else {
-      state.setState(definition.value);
+      // Non-parallel case (original logic)
+      state.value = definition.value ?? (null as unknown as UnifiedState<C>);
+
+      // Set state method to change current state in a state machine
+      state.setState = (newState: UnifiedState<C>) => {
+        state.value = newState;
+        if (newState.action) newState.action(state.context!);
+        if (newState.after) {
+          const delay =
+            typeof newState.after.delay === 'function'
+              ? newState.after.delay(state.context!)
+              : newState.after.delay;
+          setTimeout(() => state.setState!(newState.after!.target()), delay);
+        }
+      };
+
+      state.send = (event: keyof OnTransition<C>) => {
+        const currentState = state.value;
+        if (currentState?.on && currentState.on[event]) {
+          state.setState(currentState.on[event].target());
+        } else {
+          console.warn(`No transition defined for event '${String(event)}'.`);
+        }
+      };
+
+      if (!definition.value) {
+        throw new Error(
+          "Initial state must be defined when 'states' are provided."
+        );
+      } else {
+        state.setState(definition.value);
+      }
     }
   } else {
-    // Single state case
+    // Single state case (no child states)
     state.setState = (newState: UnifiedState<C>) => {
       if (newState.action) newState.action(state.context!);
       if (newState.after) {
