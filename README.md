@@ -1,123 +1,245 @@
-Here is a sample `README.md` for your NPM package that explains the concept of statecharts, highlights the benefits of using statecharts for modelling complex UIs, and includes relevant information about your module.
-
 # Statecharts-TS
 
-Statecharts-TS is a lightweight, TypeScript-powered statechart library for building complex state machines. This library is particularly useful for modelling complex UIs and system flows with deterministic, predictable, and visualizable state transitions. This is intended to be a simple and easy-to-use library for developers who want to leverage the power of statecharts in their applications.
+&#x20;&#x20;
 
-## Introduction to Statecharts
+A lightweight, class-less, type-safe state machine library for TypeScript. Effortlessly define and manage state transitions while harnessing TypeScript's powerful type system for robust, scalable state management.
 
-Statecharts are a formalism for modelling the states of a system and their transitions. They extend finite state machines (FSMs) by introducing concepts such as:
-- **Hierarchical states**: Allows states to be nested, reducing complexity.
-- **Parallel states**: Supports multiple states running in parallel.
-- **Actions and transitions**: Defines what happens during transitions between states.
-- **Guards**: Conditional transitions based on the system's current context.
+## Table of Contents
 
-Statecharts were first proposed by computer scientist David Harel in the 1980s as an extension of FSMs. The formalism provides a visual and intuitive way to model the behavior of complex systems, such as user interfaces, embedded systems, or workflows.
+- [Features](#features)
+- [Installation](#installation)
+- [Usage](#usage)
+  - [Creating a State Machine](#creating-a-state-machine)
+  - [Defining States and Transitions](#defining-states-and-transitions)
+  - [Dispatching Events](#dispatching-events)
+- [API Reference](#api-reference)
+  - [createState](#createstate)
+  - [StateMachine](#statemachine)
+  - [StateResult](#stateresult)
+- [Testing](#testing)
+- [Contributing](#contributing)
+- [Additional Resources on Statecharts](#additional-resources-on-statecharts)
+- [License](#license)
+- [Contact](#contact)
 
-### Benefits of Using Statecharts
+## Features
 
-Statecharts are ideal for modeling complex UIs and workflows for several reasons:
-- **Predictability**: Statecharts ensure that each event triggers a deterministic state transition, making it easier to understand the behavior of your application.
-- **Maintainability**: By encapsulating system behaviors into clearly defined states and transitions, statecharts reduce complexity and improve code organization.
-- **Composability**: With nested and parallel states, statecharts allow you to break down a complex UI into smaller, manageable components that run independently or concurrently.
-- **Clarity**: Statecharts provide a clear visual model of how your system behaves, making it easier for developers and designers to collaborate.
-- **Error Reduction**: Statecharts can help prevent edge cases and unexpected behavior in complex UI systems by clearly defining valid transitions and states.
-
-### Learn More About Statecharts
-- [XState Docs](https://xstate.js.org/docs/): An alternative statechart library for JavaScript and TypeScript with a rich set of features.
-- [Statecharts Specification](https://statecharts.dev/): Official documentation on statecharts, including deep dives into parallel states, hierarchy, and events.
-- [David Harel’s Original Paper](https://www.sciencedirect.com/science/article/pii/0167642390900349): The formalism that introduced statecharts.
+- **Class-less Design**: Manage states using functions and closures, avoiding the overhead of classes.
+- **Type Safety**: Leverage TypeScript's type system to ensure safe and reliable state transitions.
+- **Flexible Transitions**: Easily define immediate, delayed, and event-driven transitions.
+- **Centralized Event Handling**: Dispatch events centrally, ensuring consistent state management.
+- **Ease of Testing**: Predictable, test-friendly design for maintainable and scalable codebases.
 
 ## Installation
 
-You can install the Statecharts-TS package via NPM:
+Install `statecharts-ts` via npm or Yarn:
 
 ```bash
 npm install statecharts-ts
 ```
 
-## Quick Start
-
-Here’s a simple example of how to define and use a state machine with `Statecharts-TS`.
-
-```typescript
-import { createState } from 'statecharts-ts';
-
-// Define the states and transitions for a simple microwave model
-
-const idleState = createState({
-    context: { isDoorClosed: true, time: 30 },
-    enter: (context) => {
-        console.log("Microwave is idle.");
-    },
-    on: {
-        Start: {
-            target: () => cookingState,
-            guard: (context) => context.isDoorClosed  // Ensure the door is closed before starting
-        },
-        OpenDoor: {
-            action: (context) => { 
-                context.isDoorClosed = false;
-                console.log("Door opened.");
-            }
-        }
-    }
-});
-
-const cookingState = createState({
-    context: { isDoorClosed: true, time: 30 },
-    enter: (context) => {
-        console.log(`Cooking for ${context.time} seconds.`);
-    },
-    after: {
-        target: () => idleState,
-        delay: 30000,  // Transition after 30 seconds
-        guard: (context) => context.isDoorClosed
-    }
-});
-
-const microwaveStateMachine = {
-    idle: idleState,
-    cooking: cookingState
-};
-
-// Example usage
-microwaveStateMachine.idle.send('Start');  // Starts cooking if the door is closed
+```bash
+yarn add statecharts-ts
 ```
 
-### State Configuration
+## Usage
 
-In the above example:
-- `idleState` represents the microwave in an idle state, waiting for the user to start cooking or open the door.
-- `cookingState` simulates a cooking operation, where the microwave will automatically return to the idle state after a timeout.
+### Creating a State Machine
 
-You can define transitions using the `on` property and delayed transitions using the `after` property, making state management intuitive and flexible.
+To create a state machine, import `createState` and define your states, transitions, and actions:
+
+```typescript
+import { createState, StateMachine, StateResult } from 'statecharts-ts';
+
+// Define the context interface
+interface LightContext {
+  beforeGoPeriod: number;
+  beforeStopPeriod: number;
+  stopPeriod: number;
+  trafficRed: boolean;
+  trafficAmber: boolean;
+  trafficGreen: boolean;
+  pedestrianRed: boolean;
+  pedestrianGreen: boolean;
+}
+
+// Initialize the context
+const lightContext: LightContext = {
+  beforeGoPeriod: 3000, // 3 seconds
+  beforeStopPeriod: 10000, // 10 seconds
+  stopPeriod: 10000, // 10 seconds
+  trafficRed: true,
+  trafficAmber: false,
+  trafficGreen: false,
+  pedestrianRed: false,
+  pedestrianGreen: true,
+};
+
+// Define states
+let stopped: StateResult<'STOP', LightContext>;
+let beforeGo: StateResult<'GO', LightContext>;
+let go: StateResult<'GO', LightContext>;
+let beforeStop: StateResult<'STOP', LightContext>;
+
+// Initialize states using createState
+stopped = createState<'STOP', LightContext>({
+  context: lightContext,
+  action: (context) => {
+    context.trafficRed = true;
+    context.trafficAmber = false;
+    context.trafficGreen = false;
+    context.pedestrianRed = false;
+    context.pedestrianGreen = true;
+  },
+  after: {
+    delay: (context) => context.stopPeriod,
+    target: () => beforeGo,
+  },
+});
+
+// Define other states similarly...
+
+// Create the state machine
+const trafficLight: StateMachine<'STOP', LightContext> = createState<'STOP', LightContext>({
+  initial: stopped,
+  context: lightContext,
+  states: {
+    stopped,
+    beforeGo,
+    go,
+    beforeStop,
+  },
+}) as StateMachine<'STOP', LightContext>;
+```
+
+### Defining States and Transitions
+
+Each state may have `action`, `after`, and `on` properties to define behaviour and transitions:
+
+- **`action`**: Executed when entering a state, allowing you to modify the context.
+- **`after`**: Defines a delayed transition after a specified time.
+- **`on`**: Defines event-based transitions.
+
+```typescript
+beforeGo = createState<'GO', LightContext>({
+  context: lightContext,
+  action: (context) => {
+    context.trafficRed = false;
+    context.trafficAmber = true;
+    context.trafficGreen = false;
+    context.pedestrianRed = true;
+    context.pedestrianGreen = false;
+  },
+  after: {
+    delay: (context) => context.beforeGoPeriod,
+    target: () => go,
+  },
+});
+
+go = createState<'GO', LightContext>({
+  context: lightContext,
+  action: (context) => {
+    context.trafficRed = false;
+    context.trafficAmber = false;
+    context.trafficGreen = true;
+    context.pedestrianRed = true;
+    context.pedestrianGreen = false;
+  },
+  on: {
+    STOP: {
+      target: () => beforeStop,
+    },
+  },
+});
+```
+
+### Dispatching Events
+
+Use the `send` method of the `StateMachine` to dispatch events and trigger transitions:
+
+```typescript
+// Dispatch the 'STOP' event
+trafficLight.send('STOP');
+
+// The state machine will handle the transition based on the current state
+```
 
 ## API Reference
 
-### `createState(config, parent?)`
+### `createState`
 
-Creates a state with the given configuration. The configuration can include:
-- `context`: The data/context associated with the state.
-- `enter`: A function executed when the state is entered.
-- `on`: A mapping of events and their corresponding transitions or actions.
-- `after`: A timed transition with a delay and optional guard conditions.
-- `parallel`: A flag to define parallel states.
-- `states`: Nested states for hierarchical state management.
+Creates a state or a state machine based on the provided definition.
 
-### State Methods
+```typescript
+function createState<E extends string, C>(
+  definition: StateDefinition<E, C>
+): StateMachine<E, C> | StateResult<E, C>;
+```
 
-- `send(eventName, data?)`: Sends an event to the current state, triggering transitions or actions.
-- `subscribe(callback)`: Subscribe to state changes. The callback receives the new state and context whenever a transition occurs.
-- `debug()`: Returns a debug-friendly object showing the current state and context.
+#### Parameters:
 
-## Why Use Statecharts-TS?
+- **`definition`**: Object defining the state or state machine, including `context`, `action`, `after`, `on`, `initial`, and `states`.
 
-Statecharts-TS provides:
-- **Strong typing**: Fully typed statecharts with TypeScript for safer, more predictable state transitions.
-- **Flexibility**: Use nested states, parallel states, guards, actions, and after-timeouts to handle even the most complex workflows.
-- **Maintainability**: Improve the structure of your codebase and make it easy to reason about state transitions.
+#### Returns:
+
+- **`StateMachine<E, C> | StateResult<E, C>`**: Returns a `StateMachine` if multiple states are defined, otherwise returns a single `StateResult`.
+
+### `StateMachine`
+
+Represents the state machine, allowing event dispatching and state management.
+
+```typescript
+interface StateMachine<E extends string, C> {
+  send: (event: E) => void;
+  setState: (state: StateResult<E, C>) => void;
+  value: StateResult<E, C>;
+  context: C;
+}
+```
+
+#### Properties:
+
+- **`send(event: E)`**: Dispatches an event to trigger transitions.
+- **`setState(state: StateResult<E, C>)`**: Manually sets the current state.
+- **`value`**: The current active state.
+- **`context`**: The shared context object.
+
+### `StateResult`
+
+Represents an individual state within the state machine.
+
+```typescript
+interface StateResult<E extends string, C> {
+  send: (event: E) => void;
+  context: C;
+  setState?: (state: StateResult<E, C>) => void;
+  action?: Action<C>;
+  after?: AfterTransition<E, C>;
+  on?: OnTransition<E, C>;
+}
+```
+
+#### Properties:
+
+- **`send(event: E)`**: Dispatches an event.
+- **`context`**: The shared context object.
+- **`setState(state: StateResult<E, C>)`**: (Optional) Sets the current state.
+- **`action`**: (Optional) Function executed upon entering the state.
+- **`after`**: (Optional) Defines a delayed transition.
+- **`on`**: (Optional) Defines event-based transitions.
+
+## Additional Resources on Statecharts
+
+- **[Statecharts: A Visual Formalism for Complex Systems](https://www.inf.ed.ac.uk/teaching/courses/seoc/2005_2006/resources/statecharts.pdf)**[ (PDF)](https://www.inf.ed.ac.uk/teaching/courses/seoc/2005_2006/resources/statecharts.pdf) - The original paper by David Harel.
+- **[Statecharts by David Harel](https://www.sciencedirect.com/science/article/abs/pii/0167642387900359)** - Overview of Harel statecharts.
+- **[Statechart Diagrams (UML)](https://www.visual-paradigm.com/guide/uml-unified-modeling-language/what-is-state-diagram/)**[ - Visual Paradigm](https://www.visual-paradigm.com/guide/uml-unified-modeling-language/what-is-state-diagram/) - Introduction to statechart diagrams.
+- **[Introduction to Hierarchical State Machines](https://statecharts.github.io/)** - Interactive guide on hierarchical state machines.
+- **[State Machines vs. Statecharts](https://martinfowler.com/articles/state-machines.html)**[ - Martin Fowler](https://martinfowler.com/articles/state-machines.html) - Overview by Martin Fowler.
+- **[Constructing the User Interface with Statecharts](https://archive.org/details/isbn_9780201342789) - Book by Ian Horrocks and Jeff Z. Pan.
+
+
 
 ## License
 
-This project is licensed under the MIT License.
+This project is licensed under the [MIT License](LICENSE).
+

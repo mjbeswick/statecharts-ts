@@ -1,21 +1,18 @@
-// index.ts
+// src/index.ts
 
 type Action<C> = (context: C) => void;
 
-// AfterTransition now correctly uses E in the target
 type AfterTransition<E extends string, C> = {
   delay: number | ((context: C) => number);
   target: () => StateResult<E, C>;
 };
 
-// OnTransition now maps events of type E to their respective targets
 type OnTransition<E extends string, C> = {
   [K in E]: {
     target: () => StateResult<E, C>;
   };
 };
 
-// StateDefinition now correctly uses E and C, with E extending string
 type StateDefinition<E extends string, C> = {
   context: C;
   action?: Action<C>;
@@ -25,154 +22,141 @@ type StateDefinition<E extends string, C> = {
   states?: Record<string, StateResult<E, C>>;
 };
 
-// InternalState includes internal methods for state management
-type InternalState<E extends string, C> = StateResult<E, C> & {
-  _enterState: (machine: StateMachine<E, C>) => void;
-  _exitState: () => void;
-};
-
-// StateResult is now generic over E and C, with E extending string
-export type StateResult<E extends string, C> = {
+// Separate types for State Machine and Single States
+export type StateMachine<E extends string, C> = {
   send: (event: E) => void;
-} & Partial<{
   setState: (state: StateResult<E, C>) => void;
   value: StateResult<E, C>;
+  context: C;
+};
+
+export type StateResult<E extends string, C> = {
+  send: (event: E) => void;
+  context: C; // Added context here
+} & Partial<{
+  setState: (state: StateResult<E, C>) => void;
+  action: Action<C>;
+  after: AfterTransition<E, C>;
+  on: OnTransition<E, C>;
 }>;
 
-// State class implementing InternalState<E, C>
-class State<E extends string, C> implements InternalState<E, C> {
-  private action?: Action<C>;
-  private after?: AfterTransition<E, C>;
-  private on?: OnTransition<E, C>;
-  private context: C;
-  private machine?: StateMachine<E, C>;
-  private timer?: ReturnType<typeof setTimeout>;
+export function createState<E extends string, C>(
+  definition: StateDefinition<E, C>
+): StateMachine<E, C> | StateResult<E, C> {
+  if (definition.states) {
+    // Create state machine
+    const stateMachine: StateMachine<E, C> = {
+      send: () => {},
+      setState: () => {},
+      value: null as unknown as StateResult<E, C>, // Temporarily set to null, will be initialized
+      context: definition.context,
+    };
 
-  // Implement InternalState<E, C>
-  _enterState!: (machine: StateMachine<E, C>) => void;
-  _exitState!: () => void;
+    const states = definition.states;
 
-  constructor(definition: StateDefinition<E, C>) {
-    this.context = definition.context;
-    this.action = definition.action;
-    this.after = definition.after;
-    this.on = definition.on;
-
-    // Bind internal methods to maintain correct 'this' context
-    this._enterState = this.enterState.bind(this);
-    this._exitState = this.exitState.bind(this);
-  }
-
-  send(event: E): void {
-    if (this.on && this.on[event]) {
-      const targetState = this.on[event].target();
-      if (this.machine) {
-        this.machine.transitionTo(targetState);
-      }
+    // Assign send methods of states to the state machine's send
+    for (const key in states) {
+      const state = states[key];
+      state.send = (event: E) => stateMachine.send(event);
     }
-  }
 
-  // Internal method to handle entering the state
-  private enterState(machine: StateMachine<E, C>): void {
-    this.machine = machine;
-    this.action?.(this.context);
-    if (this.after) {
-      const delay =
-        typeof this.after.delay === 'function'
-          ? this.after.delay(this.context)
-          : this.after.delay;
-      this.timer = setTimeout(() => {
-        const target = this.after!.target();
-        machine.transitionTo(target);
-      }, delay);
-    }
-  }
+    // Implement setState
+    stateMachine.setState = (state: StateResult<E, C>) => {
+      stateMachine.value = state;
 
-  // Internal method to handle exiting the state
-  private exitState(): void {
-    if (this.timer) {
-      clearTimeout(this.timer);
-      this.timer = undefined;
-    }
-  }
-}
-
-// StateMachine class implementing StateResult<E, C>
-class StateMachine<E extends string, C> implements StateResult<E, C> {
-  private currentState: InternalState<E, C>;
-  private context: C;
-  private states: Record<string, InternalState<E, C>>;
-
-  setState!: (state: StateResult<E, C>) => void;
-  value!: StateResult<E, C>;
-
-  // Implement StateResult<E, C>
-  send(event: E): void {
-    this.currentState.send(event);
-  }
-
-  constructor(definition: StateDefinition<E, C>) {
-    this.context = definition.context;
-    this.states = {} as Record<string, InternalState<E, C>>;
-
-    if (definition.states) {
-      // Initialize all states
-      for (const key in definition.states) {
-        const state = definition.states[key];
-        if (!(state instanceof State)) {
-          throw new Error(`State "${key}" must be created using createState.`);
-        }
-        this.states[key] = state as InternalState<E, C>;
+      if (state.action) {
+        state.action(stateMachine.context);
       }
 
-      if (!definition.initial) {
-        throw new Error(
-          "Initial state must be defined when 'states' are provided."
+      if (state.after) {
+        const delay =
+          typeof state.after.delay === 'function'
+            ? state.after.delay(stateMachine.context)
+            : state.after.delay;
+
+        setTimeout(() => {
+          const target = state.after!.target();
+          stateMachine.setState!(target);
+        }, delay);
+      }
+    };
+
+    // Implement send
+    stateMachine.send = (event: E) => {
+      const currentState = stateMachine.value;
+
+      if (currentState && currentState.on && currentState.on[event]) {
+        const target = currentState.on[event].target();
+        stateMachine.setState!(target);
+      } else {
+        console.warn(
+          `No transition defined for event '${event}' in state '${currentState}'.`
         );
       }
+    };
 
-      // Ensure the initial state is one of the defined states
-      const initialState = Object.values(this.states).find(
-        (state) => state === definition.initial
-      );
-
-      if (!initialState) {
-        throw new Error('Initial state must be one of the defined states.');
-      }
-
-      this.currentState = initialState;
+    // Initialize with initial state
+    if (definition.initial) {
+      stateMachine.setState(definition.initial);
     } else {
-      if (!(definition.initial instanceof State)) {
-        throw new Error('Initial state must be a valid State.');
-      }
-      this.currentState = definition.initial as InternalState<E, C>;
+      throw new Error(
+        "Initial state must be defined when 'states' are provided."
+      );
     }
 
-    // Bind methods
-    this.setState = (state: StateResult<E, C>) => this.transitionTo(state);
-    this.value = this.currentState;
-
-    // Enter the initial state
-    this.currentState._enterState(this);
-  }
-
-  transitionTo(state: StateResult<E, C>): void {
-    const targetState = state as InternalState<E, C>;
-    if (this.currentState === targetState) return;
-    this.currentState._exitState();
-    this.currentState = targetState;
-    this.value = this.currentState;
-    this.currentState._enterState(this);
-  }
-}
-
-// createState now correctly constrains E to extend string
-export function createState<E extends string = string, C = any>(
-  definition: StateDefinition<E, C>
-): StateResult<E, C> {
-  if (definition.states) {
-    return new StateMachine<E, C>(definition);
+    return stateMachine;
   } else {
-    return new State<E, C>(definition);
+    // Create single state
+    const state: StateResult<E, C> = {
+      send: (event: E) => {},
+      context: definition.context, // Now allowed
+    };
+
+    // Assign action, after, on if present
+    if (definition.action) {
+      state.action = definition.action;
+    }
+    if (definition.after) {
+      state.after = definition.after;
+    }
+    if (definition.on) {
+      state.on = definition.on;
+    }
+
+    // Implement send
+    state.send = (event: E) => {
+      if (state.on && state.on[event]) {
+        const target = state.on[event].target();
+        state.setState?.(target);
+      }
+    };
+
+    // Implement setState
+    state.setState = (newState: StateResult<E, C>) => {
+      if (newState.action) {
+        newState.action(newState.context);
+      }
+
+      if (newState.after) {
+        const delay =
+          typeof newState.after.delay === 'function'
+            ? newState.after.delay(newState.context)
+            : newState.after.delay;
+
+        setTimeout(() => {
+          const target = newState.after!.target();
+          newState.setState?.(target);
+        }, delay);
+      }
+
+      // Note: Do NOT set state.value to avoid circular references
+    };
+
+    // Initialize state
+    if (definition.initial) {
+      state.setState?.(definition.initial);
+    }
+
+    return state;
   }
 }

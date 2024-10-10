@@ -1,23 +1,53 @@
 {
   "name": "statechart-ts",
   "version": "0.1.0",
-  "main": "index.ts",
-  "node": "22.8.0",
+  "description": "A class-less, type-safe state machine library for TypeScript.",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
   "scripts": {
-    "test": "vitest"
+    "build": "tsc",
+    "test": "vitest run",
+    "dev": "tsc --watch",
+    "prepare": "npm run build",
+    "lint": "eslint . --ext .ts",
+    "prepublishOnly": "npm run test && npm run build"
   },
-  "author": "",
-  "license": "ISC",
-  "description": "",
-  "devDependencies": {
-    "@types/bun": "^1.1.11",
-    "@types/jest": "^29.5.13",
-    "vitest": "^2.1.2"
+  "author": "Michael Beswick",
+  "license": "MIT",
+  "engines": {
+    "node": ">=18.0.0"
   },
   "volta": {
     "node": "22.8.0"
   },
+  "dependencies": {},
+  "devDependencies": {
+    "typescript": "^5.1.6",
+    "eslint": "^8.50.0",
+    "@typescript-eslint/parser": "^5.65.0",
+    "@typescript-eslint/eslint-plugin": "^5.65.0",
+    "vitest": "^2.1.2",
+    "@types/jest": "^29.5.13",
+    "@types/node": "^20.4.2"
+  },
   "peerDependencies": {
     "typescript": "^5.0.0"
-  }
+  },
+  "keywords": [
+    "state-machine",
+    "finite-state-machine",
+    "statecharts",
+    "typescript",
+    "fsm",
+    "state-management"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/<your-username>/statechart-ts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/<your-username>/statechart-ts/issues"
+  },
+  "homepage": "https://github.com/<your-username>/statechart-ts#readme"
 }
