@@ -235,7 +235,7 @@ interface StateResult<E extends string, C> {
 - **[Statechart Diagrams (UML)](https://www.visual-paradigm.com/guide/uml-unified-modeling-language/what-is-state-diagram/)**[ - Visual Paradigm](https://www.visual-paradigm.com/guide/uml-unified-modeling-language/what-is-state-diagram/) - Introduction to statechart diagrams.
 - **[Introduction to Hierarchical State Machines](https://statecharts.github.io/)** - Interactive guide on hierarchical state machines.
 - **[State Machines vs. Statecharts](https://martinfowler.com/articles/state-machines.html)**[ - Martin Fowler](https://martinfowler.com/articles/state-machines.html) - Overview by Martin Fowler.
-- **[Constructing the User Interface with Statecharts](https://archive.org/details/isbn_9780201342789) - Book by Ian Horrocks and Jeff Z. Pan.
+- **[Constructing the User Interface with Statecharts](https://archive.org/details/isbn_9780201342789)** - Book by Ian Horrocks and Jeff Z. Pan.
 
 
 
