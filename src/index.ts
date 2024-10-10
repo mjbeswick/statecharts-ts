@@ -11,7 +11,7 @@ type OnTransition<C> = {
   };
 };
 
-type UnifiedState<C> = {
+export type UnifiedState<C> = {
   send: (event: keyof OnTransition<C>) => void;
   setState: (state: UnifiedState<C>) => void;
   context?: C;
@@ -19,95 +19,72 @@ type UnifiedState<C> = {
   after?: AfterTransition<C>;
   on?: OnTransition<C>;
   states?: Record<string, UnifiedState<C>>;
-  value?: UnifiedState<C>; // If it's a state machine, this tracks the current state
+  value?: UnifiedState<C>;
 };
 
-export function createState<C>(definition: UnifiedState<C>): UnifiedState<C> {
+export function createState<C>(
+  definition: Omit<UnifiedState<C>, 'send' | 'setState'>
+): UnifiedState<C> {
   const state: UnifiedState<C> = {
-    send: (event: keyof OnTransition<C>) => {},
-    setState: () => {},
+    send: () => {}, // Placeholder, will be initialized later
+    setState: () => {}, // Placeholder, will be initialized later
     context: definition.context,
     action: definition.action,
     after: definition.after,
     on: definition.on,
     states: definition.states,
-    value: undefined, // Will be assigned later if it's a state machine
+    value: undefined,
   };
 
   if (definition.states) {
-    // It's a state machine
-    state.value = definition.value ?? (null as unknown as UnifiedState<C>); // Temporary assignment
+    // State machine case
+    state.value = definition.value ?? (null as unknown as UnifiedState<C>);
 
-    // Assign send methods of states to the state machine's send
-    for (const key in definition.states) {
-      const childState = definition.states[key];
-      childState.send = (event: keyof OnTransition<C>) => state.send(event);
-    }
-
-    // Set the current state
+    // Set state method to change current state in a state machine
     state.setState = (newState: UnifiedState<C>) => {
       state.value = newState;
-      if (newState.action) {
-        newState.action(state.context!);
-      }
-
+      if (newState.action) newState.action(state.context!);
       if (newState.after) {
         const delay =
           typeof newState.after.delay === 'function'
             ? newState.after.delay(state.context!)
             : newState.after.delay;
-
-        setTimeout(() => {
-          const targetState = newState.after!.target();
-          state.setState!(targetState);
-        }, delay);
+        setTimeout(() => state.setState!(newState.after!.target()), delay);
       }
     };
 
-    // Implement send method for state machine
     state.send = (event: keyof OnTransition<C>) => {
       const currentState = state.value;
       if (currentState?.on && currentState.on[event]) {
-        const target = currentState.on[event].target();
-        state.setState!(target);
+        state.setState(currentState.on[event].target());
       } else {
         console.warn(`No transition defined for event '${String(event)}'.`);
       }
     };
 
-    // Initialize with the first state
-    if (definition.value) {
-      state.setState(definition.value);
-    } else {
+    if (!definition.value) {
       throw new Error(
         "Initial state must be defined when 'states' are provided."
       );
+    } else {
+      state.setState(definition.value);
     }
   } else {
-    // It's a single state
+    // Single state case
     state.setState = (newState: UnifiedState<C>) => {
-      if (newState.action) {
-        newState.action(newState.context!);
-      }
-
+      if (newState.action) newState.action(state.context!);
       if (newState.after) {
         const delay =
           typeof newState.after.delay === 'function'
-            ? newState.after.delay(newState.context!)
+            ? newState.after.delay(state.context!)
             : newState.after.delay;
-
-        setTimeout(() => {
-          const target = newState.after!.target();
-          state.setState!(target);
-        }, delay);
+        setTimeout(() => state.setState!(newState.after!.target()), delay);
       }
     };
 
-    // Implement send method for a single state
     state.send = (event: keyof OnTransition<C>) => {
       if (state.on && state.on[event]) {
-        const target = state.on[event].target();
-        state.setState(target);
+        state.setState(state.on[event].target());
       }
     };
   }

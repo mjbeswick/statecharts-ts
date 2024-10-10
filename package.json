@@ -7,7 +7,7 @@
   "types": "dist/index.d.ts",
   "scripts": {
     "build": "tsc",
-    "test": "vitest run",
+    "test": "vitest --watch",
     "dev": "tsc --watch",
     "prepare": "npm run build",
     "lint": "eslint . --ext .ts",

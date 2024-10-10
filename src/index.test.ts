@@ -10,10 +10,16 @@ import {
 import { createState, type UnifiedState } from './index';
 
 describe('traffic light state machine', () => {
+  // UK traffic light sequence
+  // 1. Stop - Traffic light red, pedestrian light green
+  // 2. Prepare to go - Traffic light amber, pedestrian light red
+  // 3. Go - Traffic light green, pedestrian light red
+  // 4. Prepare to stop - Traffic light amber, pedestrian light red
+
   let trafficLight: UnifiedState<typeof lightContext>;
   let lightContext: {
-    beforeGoPeriod: number;
-    beforeStopPeriod: number;
+    prepareToGoPeriod: number;
+    prepareToStopPeriod: number;
     stopPeriod: number;
     trafficRed: boolean;
     trafficAmber: boolean;
@@ -31,10 +37,9 @@ describe('traffic light state machine', () => {
   });
 
   beforeEach(() => {
-    // Reset lightContext to initial state before each test
     lightContext = {
-      beforeGoPeriod: 3_000,
-      beforeStopPeriod: 10_000,
+      prepareToGoPeriod: 3_000,
+      prepareToStopPeriod: 10_000,
       stopPeriod: 10_000,
       trafficRed: true,
       trafficAmber: false,
@@ -54,11 +59,11 @@ describe('traffic light state machine', () => {
       },
       after: {
         delay: (context) => context.stopPeriod,
-        target: () => beforeGo,
+        target: () => prepareToGo,
       },
     });
 
-    const beforeGo = createState({
+    const prepareToGo = createState({
       context: lightContext,
       action: (context) => {
         context.trafficRed = false;
@@ -68,7 +73,7 @@ describe('traffic light state machine', () => {
         context.pedestrianGreen = false;
       },
       after: {
-        delay: (context) => context.beforeGoPeriod,
+        delay: (context) => context.prepareToGoPeriod,
         target: () => go,
       },
     });
@@ -84,12 +89,12 @@ describe('traffic light state machine', () => {
       },
       on: {
         STOP: {
-          target: () => beforeStop,
+          target: () => prepareToStop,
         },
       },
     });
 
-    const beforeStop = createState({
+    const prepareToStop = createState({
       context: lightContext,
       action: (context) => {
         context.trafficRed = false;
@@ -99,7 +104,7 @@ describe('traffic light state machine', () => {
         context.pedestrianGreen = false;
       },
       after: {
-        delay: (context) => context.beforeStopPeriod,
+        delay: (context) => context.prepareToStopPeriod,
         target: () => stopped,
       },
     });
@@ -109,9 +114,9 @@ describe('traffic light state machine', () => {
       context: lightContext,
       states: {
         stopped,
-        beforeGo,
+        prepareToGo,
         go,
-        beforeStop,
+        prepareToStop,
       },
       value: stopped, // Initial state
     });
@@ -126,8 +131,8 @@ describe('traffic light state machine', () => {
     expect(lightContext.pedestrianGreen).toBe(true);
   });
 
-  test('when stopped, transitions to beforeGo', () => {
-    trafficLight.setState(trafficLight.value);
+  test('when stopped, transitions to prepareToGo', () => {
+    trafficLight.setState(trafficLight);
     vi.advanceTimersByTime(lightContext.stopPeriod);
     expect(trafficLight.value).toBe(trafficLight.value);
     expect(lightContext.trafficRed).toBe(false);
@@ -137,8 +142,8 @@ describe('traffic light state machine', () => {
     expect(lightContext.pedestrianGreen).toBe(false);
   });
 
-  test('when stopped, transitions to beforeGo', () => {
-    trafficLight.setState(trafficLight.value);
+  test('when stopped, transitions to prepareToGo', () => {
+    trafficLight.setState(trafficLight);
     vi.advanceTimersByTime(lightContext.stopPeriod);
     expect(trafficLight.value).toBe(trafficLight.value);
     expect(lightContext.trafficRed).toBe(false);
@@ -148,10 +153,10 @@ describe('traffic light state machine', () => {
     expect(lightContext.pedestrianGreen).toBe(false);
   });
 
-  test('when beforeGo, transitions to go', () => {
-    trafficLight.setState(trafficLight.value);
-    vi.advanceTimersByTime(lightContext.beforeGoPeriod);
-    expect(trafficLight.value).toBe(trafficLight.value);
+  test('when prepareToGo, transitions to go', () => {
+    trafficLight.setState(trafficLight.states!.prepareToGo);
+    vi.advanceTimersByTime(lightContext.prepareToGoPeriod);
+    expect(trafficLight.value).toBe(trafficLight.states!.go);
     expect(lightContext.trafficRed).toBe(false);
     expect(lightContext.trafficAmber).toBe(false);
     expect(lightContext.trafficGreen).toBe(true);
@@ -159,10 +164,10 @@ describe('traffic light state machine', () => {
     expect(lightContext.pedestrianGreen).toBe(false);
   });
 
-  test('when go, transitions to beforeStop', () => {
-    trafficLight.setState(trafficLight.value);
+  test('when go, transitions to prepareToStop', () => {
+    trafficLight.setState(trafficLight.states!.go);
     trafficLight.send('STOP');
-    expect(trafficLight.value).toBe(trafficLight.value);
+    expect(trafficLight.value).toBe(trafficLight.states!.prepareToStop);
     expect(lightContext.trafficRed).toBe(false);
     expect(lightContext.trafficAmber).toBe(true);
     expect(lightContext.trafficGreen).toBe(false);
@@ -170,10 +175,10 @@ describe('traffic light state machine', () => {
     expect(lightContext.pedestrianGreen).toBe(false);
   });
 
-  test('when beforeStop, transitions to stopped', () => {
-    trafficLight.setState(trafficLight.value);
-    vi.advanceTimersByTime(lightContext.beforeStopPeriod);
-    expect(trafficLight.value).toBe(trafficLight.value);
+  test('when prepareToStop, transitions to stopped', () => {
+    trafficLight.setState(trafficLight.states!.prepareToStop);
+    vi.advanceTimersByTime(lightContext.prepareToStopPeriod);
+    expect(trafficLight.value).toBe(trafficLight.states!.stopped);
     expect(lightContext.trafficRed).toBe(true);
     expect(lightContext.trafficAmber).toBe(false);
     expect(lightContext.trafficGreen).toBe(false);
