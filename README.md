@@ -1,3 +1,6 @@
+![Version](https://img.shields.io/npm/v/statecharts-ts)
+![Downloads](https://img.shields.io/npm/dt/statecharts-ts)
+
 # Statecharts-ts
 
 A lightweight, class-less, type-safe state machine library for TypeScript. Effortlessly define and manage state transitions while harnessing TypeScript's powerful type system for robust, scalable state management.
