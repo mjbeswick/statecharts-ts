@@ -24,18 +24,39 @@ export type UnifiedState<C> = {
   parallel?: boolean; // Indicates whether this state has parallel states
 };
 
+type StateDefinition<C> = {
+  context: C;
+  action?: (context: C) => void;
+  after?: {
+    delay: (context: C) => number;
+    target: () => UnifiedState<C>;
+  };
+  on?: {
+    [event: string]: {
+      target: () => UnifiedState<C>;
+    };
+  };
+  states?: {
+    [key: string]: UnifiedState<C>;
+  };
+  parallel?: boolean;
+} & ( // Conditional type
+    { parallel: true; value?: never } | // If parallel is true, value must be undefined
+    { parallel?: false; value: UnifiedState<C> } // If parallel is false or undefined, value is required
+  );
+
 export function createState<C>(
-  definition: Omit<UnifiedState<C>, 'send' | 'setState'>
+  definition: StateDefinition<C>
 ): UnifiedState<C> {
   const state: UnifiedState<C> = {
-    send: () => {}, // Placeholder, will be initialized later
-    setState: () => {}, // Placeholder, will be initialized later
+    send: () => { }, // Placeholder, will be initialized later
+    setState: () => { }, // Placeholder, will be initialized later
     context: definition.context,
     action: definition.action,
     after: definition.after,
     on: definition.on,
     states: definition.states,
-    value: undefined,
+    value: definition.states ? definition.value : undefined, // Ensure value is undefined if states is undefined
     activeStates: definition.parallel ? {} : undefined,
     parallel: definition.parallel,
   };
@@ -44,9 +65,9 @@ export function createState<C>(
     if (state.parallel) {
       // Initialize each parallel sub-state
       Object.keys(definition.states).forEach((stateKey) => {
-        const subStateDef = definition.states![stateKey];
+        const subStateDef = definition.states![stateKey] as StateDefinition<C>;
         state.activeStates![stateKey] = createState(subStateDef);
-        state.activeStates![stateKey].context = state.context;
+        state.activeStates![stateKey].context = state.context!;
       });
 
       // Handle setting parallel states

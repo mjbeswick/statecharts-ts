@@ -108,7 +108,6 @@ describe('nested and parallel state machine', () => {
         stateA,
         stateB,
       },
-      value: stateA,
     });
   });
 
