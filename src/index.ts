@@ -1,62 +1,58 @@
-type Action<C> = (context: C) => void;
+// Define the types for the State Machine
 
-type AfterTransition<C> = {
-  delay: number | ((context: C) => number);
-  target: () => UnifiedState<C>;
-};
+type Context = Record<string, any>; // Modify this based on your actual context structure
 
-type OnTransition<C> = {
-  [K: string]: {
-    target: () => UnifiedState<C>;
-  };
-};
+interface Action {
+  (context: Context): void;
+  guard?: (context: Context) => boolean; // Optional guard property
+}
 
-export type UnifiedState<C> = {
-  send: (event: keyof OnTransition<C>) => void;
-  setState: (state: UnifiedState<C>) => void;
-  context?: C;
-  action?: Action<C>;
-  after?: AfterTransition<C>;
-  on?: OnTransition<C>;
-  states?: Record<string, UnifiedState<C>>;
-  value?: UnifiedState<C>; // For single active child state (non-parallel)
-  activeStates?: Record<string, UnifiedState<C>>; // For parallel states
-  parallel?: boolean; // Indicates whether this state has parallel states
-};
+interface After {
+  delay: number | ((context: Context) => number);
+  target: () => State;
+  guard?: (context: Context) => boolean; // Optional guard property
+}
 
-type StateDefinition<C> = {
-  context: C;
-  action?: (context: C) => void;
-  after?: {
-    delay: (context: C) => number;
-    target: () => UnifiedState<C>;
-  };
-  on?: {
-    [event: string]: {
-      target: () => UnifiedState<C>;
-    };
-  };
-  states?: {
-    [key: string]: UnifiedState<C>;
-  };
+interface EventHandler {
+  target: () => State;
+  data?: (context: Context) => any;
+  guard?: (context: Context) => boolean; // Optional guard property
+}
+
+interface StateDefinition {
+  context: Context;
+  action?: Action;
+  after?: After;
+  on?: Record<string, EventHandler>;
+  states?: Record<string, StateDefinition>;
+  state?: StateDefinition;
   parallel?: boolean;
-} & ( // Conditional type
-    { parallel: true; value?: never } | // If parallel is true, value must be undefined
-    { parallel?: false; value: UnifiedState<C> } // If parallel is false or undefined, value is required
-  );
+}
 
-export function createState<C>(
-  definition: StateDefinition<C>
-): UnifiedState<C> {
-  const state: UnifiedState<C> = {
-    send: () => { }, // Placeholder, will be initialized later
-    setState: () => { }, // Placeholder, will be initialized later
+export interface State {
+  send: (event: string, data?: any) => void;
+  setState: (newState: StateDefinition) => void;
+  context: Context;
+  action?: Action;
+  after?: After;
+  on?: Record<string, EventHandler>;
+  states?: Record<string, State>;
+  state?: StateDefinition;
+  activeStates?: Record<string, State>;
+  parallel?: boolean;
+}
+
+// Strongly typed `createState` function
+export function createState(definition: StateDefinition): State {
+  const state: State = {
+    send: () => { },
+    setState: () => { },
     context: definition.context,
     action: definition.action,
     after: definition.after,
     on: definition.on,
-    states: definition.states,
-    value: definition.states ? definition.value : undefined, // Ensure value is undefined if states is undefined
+    states: definition.states ? {} : undefined,
+    state: definition.state,
     activeStates: definition.parallel ? {} : undefined,
     parallel: definition.parallel,
   };
@@ -65,88 +61,119 @@ export function createState<C>(
     if (state.parallel) {
       // Initialize each parallel sub-state
       Object.keys(definition.states).forEach((stateKey) => {
-        const subStateDef = definition.states![stateKey] as StateDefinition<C>;
+        const subStateDef = definition.states![stateKey];
         state.activeStates![stateKey] = createState(subStateDef);
-        state.activeStates![stateKey].context = state.context!;
+        state.activeStates![stateKey].context = state.context;
       });
 
+      // Set the initial state for parallel states
+      state.state = state.activeStates![Object.keys(state.activeStates!)[0]].state;
+
       // Handle setting parallel states
-      state.setState = (newState: UnifiedState<C>) => {
-        // Parallel state setState only reinitializes parallel states
+      state.setState = (newState: StateDefinition) => {
         Object.keys(state.activeStates!).forEach((key) => {
-          const activeState = state.activeStates![key];
-          if (activeState.action) activeState.action(state.context!);
-          if (activeState.after) {
-            const delay =
-              typeof activeState.after.delay === 'function'
-                ? activeState.after.delay(state.context!)
-                : activeState.after.delay;
-            setTimeout(
-              () => activeState.setState!(activeState.after!.target()),
-              delay
-            );
+          if (state.activeStates![key].state === newState) {
+            state.activeStates![key].setState(newState);
+            state.state = newState;
           }
         });
+
+        if (!newState.action?.guard || newState.action.guard(state.context)) {
+          if (newState.action) newState.action(state.context);
+        }
+        if (newState.after && (!newState.after.guard || newState.after.guard(state.context))) {
+          const delay =
+            typeof newState.after.delay === 'function'
+              ? newState.after.delay(state.context)
+              : newState.after.delay;
+          setTimeout(() => state.setState(newState.after!.target()), delay);
+        }
       };
 
       // Handle send for parallel states
-      state.send = (event: keyof OnTransition<C>) => {
+      state.send = (event: string, data?: any) => {
         Object.values(state.activeStates!).forEach((activeState) => {
           if (activeState.on && activeState.on[event]) {
-            activeState.setState(activeState.on[event].target());
+            const eventHandler = activeState.on[event];
+            if (!eventHandler.guard || eventHandler.guard(state.context)) {
+              activeState.setState(eventHandler.target());
+              state.state = activeState.state;
+            }
           }
         });
       };
     } else {
       // Non-parallel case (original logic)
-      state.value = definition.value ?? (null as unknown as UnifiedState<C>);
+      Object.keys(definition.states).forEach((key) => {
+        state.states![key] = createState(definition.states![key]);
+      });
 
-      // Set state method to change current state in a state machine
-      state.setState = (newState: UnifiedState<C>) => {
-        state.value = newState;
-        if (newState.action) newState.action(state.context!);
-        if (newState.after) {
+      state.setState = (newState: StateDefinition) => {
+        if (!newState.action?.guard || newState.action.guard(state.context)) {
+          if (newState.action) newState.action(state.context);
+        }
+        if (newState.after && (!newState.after.guard || newState.after.guard(state.context))) {
           const delay =
             typeof newState.after.delay === 'function'
-              ? newState.after.delay(state.context!)
+              ? newState.after.delay(state.context)
               : newState.after.delay;
-          setTimeout(() => state.setState!(newState.after!.target()), delay);
+          setTimeout(() => state.setState(newState.after!.target()), delay);
         }
+        state.state = newState;
       };
 
-      state.send = (event: keyof OnTransition<C>) => {
-        const currentState = state.value;
+      state.send = (event: string, data?: any) => {
+        const currentState = state.state;
         if (currentState?.on && currentState.on[event]) {
-          state.setState(currentState.on[event].target());
+          const eventHandler = currentState.on[event];
+          if (!eventHandler.guard || eventHandler.guard(state.context)) {
+            if (eventHandler.data) {
+              const payload = eventHandler.data(state.context);
+              console.log('Payload:', payload);
+            }
+            state.setState(eventHandler.target());
+          }
         } else {
-          console.warn(`No transition defined for event '${String(event)}'.`);
+          console.warn(`No transition defined for event '${event}'.`);
         }
       };
 
-      if (!definition.value) {
+      if (!definition.state) {
         throw new Error(
           "Initial state must be defined when 'states' are provided."
         );
-      } else {
-        state.setState(definition.value);
       }
+    }
+
+    if (definition.state) {
+      state.setState(definition.state);
     }
   } else {
     // Single state case (no child states)
-    state.setState = (newState: UnifiedState<C>) => {
-      if (newState.action) newState.action(state.context!);
-      if (newState.after) {
+    state.setState = (newState: StateDefinition) => {
+      if (!newState.action?.guard || newState.action.guard(state.context)) {
+        if (newState.action) newState.action(state.context);
+      }
+      if (newState.after && (!newState.after.guard || newState.after.guard(state.context))) {
         const delay =
           typeof newState.after.delay === 'function'
-            ? newState.after.delay(state.context!)
+            ? newState.after.delay(state.context)
             : newState.after.delay;
-        setTimeout(() => state.setState!(newState.after!.target()), delay);
+        setTimeout(() => state.setState(newState.after!.target()), delay);
       }
+      state.state = newState;
     };
 
-    state.send = (event: keyof OnTransition<C>) => {
+    state.send = (event: string, data?: any) => {
       if (state.on && state.on[event]) {
-        state.setState(state.on[event].target());
+        const eventHandler = state.on[event];
+        if (!eventHandler.guard || eventHandler.guard(state.context)) {
+          if (eventHandler.data) {
+            const payload = eventHandler.data(state.context);
+            console.log('Payload:', payload);
+          }
+          state.setState(eventHandler.target());
+        }
       }
     };
   }

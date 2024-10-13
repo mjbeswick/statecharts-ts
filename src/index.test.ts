@@ -7,20 +7,20 @@ import {
   vi,
   expect,
 } from 'vitest';
-import { createState, type UnifiedState } from './index';
+import { createState, type State } from './index';
 
 describe('nested and parallel state machine', () => {
-  let machine: UnifiedState<typeof context>;
+  let machine: State;
   let context: {
     counter: number;
   };
 
-  let stateA: UnifiedState<typeof context>;
-  let stateA1: UnifiedState<typeof context>;
-  let stateA2: UnifiedState<typeof context>;
-  let stateB: UnifiedState<typeof context>;
-  let stateB1: UnifiedState<typeof context>;
-  let stateB2: UnifiedState<typeof context>;
+  let stateA: State;
+  let stateA1: State;
+  let stateA2: State;
+  let stateB: State;
+  let stateB1: State;
+  let stateB2: State;
 
   beforeAll(() => {
     vi.useFakeTimers();
@@ -37,9 +37,6 @@ describe('nested and parallel state machine', () => {
 
     stateA1 = createState({
       context,
-      action: (context) => {
-        context.counter += 1;
-      },
       on: {
         NEXT: {
           target: () => stateA2,
@@ -50,7 +47,8 @@ describe('nested and parallel state machine', () => {
     stateA2 = createState({
       context,
       action: (context) => {
-        context.counter += 2;
+        console.log('action 2');
+        context.counter = 2;
       },
       on: {
         NEXT: {
@@ -65,14 +63,11 @@ describe('nested and parallel state machine', () => {
         stateA1,
         stateA2,
       },
-      value: stateA1,
+      state: stateA1,
     });
 
     stateB1 = createState({
       context,
-      action: (context) => {
-        context.counter += 3;
-      },
       on: {
         NEXT: {
           target: () => stateB2,
@@ -83,7 +78,8 @@ describe('nested and parallel state machine', () => {
     stateB2 = createState({
       context,
       action: (context) => {
-        context.counter += 4;
+        console.log('action 4');
+        context.counter = 4;
       },
       on: {
         NEXT: {
@@ -98,7 +94,7 @@ describe('nested and parallel state machine', () => {
         stateB1,
         stateB2,
       },
-      value: stateB1,
+      state: stateB1,
     });
 
     machine = createState({
@@ -108,38 +104,44 @@ describe('nested and parallel state machine', () => {
         stateA,
         stateB,
       },
+      state: stateA1
     });
   });
 
   test('starts in stateA1', () => {
-    expect(machine.value).toBe(stateA1);
-    expect(context.counter).toBe(1);
+    expect(machine.state).toBe(stateA1);
+    expect(context.counter).toBe(0);
+  });
+
+  test('sets state', () => {
+    machine.setState(stateA2)
+    expect(machine.state).toBe(stateA2);
   });
 
   test('when in stateA1, transitions to stateA2', () => {
-    machine.send('NEXT');
-    expect(machine.value).toBe(stateA2);
-    expect(context.counter).toBe(3);
+    stateA1.send('NEXT')
+    expect(machine.state).toBe(stateA2);
+    expect(context.counter).toBe(2);
   });
 
   test('when in stateA2, transitions to stateA1', () => {
     machine.setState(stateA2);
     machine.send('NEXT');
-    expect(machine.value).toBe(stateA1);
+    expect(machine.state).toBe(stateA1);
     expect(context.counter).toBe(4);
   });
 
   test('when in stateB1, transitions to stateB2', () => {
     machine.setState(stateB1);
     machine.send('NEXT');
-    expect(machine.value).toBe(stateB2);
+    expect(machine.state).toBe(stateB2);
     expect(context.counter).toBe(7);
   });
 
   test('when in stateB2, transitions to stateB1', () => {
     machine.setState(stateB2);
     machine.send('NEXT');
-    expect(machine.value).toBe(stateB1);
+    expect(machine.state).toBe(stateB1);
     expect(context.counter).toBe(8);
   });
 
@@ -148,7 +150,7 @@ describe('nested and parallel state machine', () => {
     machine.send('NEXT');
     machine.setState(stateB1);
     machine.send('NEXT');
-    expect(machine.value).toBe(machine.value);
+    expect(machine.state).toBe(machine.state);
     expect(context.counter).toBe(8);
   });
 });
@@ -160,7 +162,7 @@ describe('traffic light state machine', () => {
   // 3. Go - Traffic light green, pedestrian light red
   // 4. Prepare to stop - Traffic light amber, pedestrian light red
 
-  let trafficLight: UnifiedState<typeof lightContext>;
+  let trafficLight: State;
   let lightContext: {
     prepareToGoPeriod: number;
     prepareToStopPeriod: number;
@@ -262,12 +264,12 @@ describe('traffic light state machine', () => {
         go,
         prepareToStop,
       },
-      value: stopped, // Initial state
+      state: stopped, // Initial state
     });
   });
 
   test('starts in stopped state', () => {
-    expect(trafficLight.value).toBe(trafficLight.value);
+    expect(trafficLight.state).toBe(trafficLight.state);
     expect(lightContext.trafficRed).toBe(true);
     expect(lightContext.trafficAmber).toBe(false);
     expect(lightContext.trafficGreen).toBe(false);
@@ -278,7 +280,7 @@ describe('traffic light state machine', () => {
   test('when stopped, transitions to prepareToGo', () => {
     trafficLight.setState(trafficLight);
     vi.advanceTimersByTime(lightContext.stopPeriod);
-    expect(trafficLight.value).toBe(trafficLight.value);
+    expect(trafficLight.state).toBe(trafficLight.state);
     expect(lightContext.trafficRed).toBe(false);
     expect(lightContext.trafficAmber).toBe(true);
     expect(lightContext.trafficGreen).toBe(false);
@@ -289,7 +291,7 @@ describe('traffic light state machine', () => {
   test('when stopped, transitions to prepareToGo', () => {
     trafficLight.setState(trafficLight);
     vi.advanceTimersByTime(lightContext.stopPeriod);
-    expect(trafficLight.value).toBe(trafficLight.value);
+    expect(trafficLight.state).toBe(trafficLight.state);
     expect(lightContext.trafficRed).toBe(false);
     expect(lightContext.trafficAmber).toBe(true);
     expect(lightContext.trafficGreen).toBe(false);
@@ -300,7 +302,7 @@ describe('traffic light state machine', () => {
   test('when prepareToGo, transitions to go', () => {
     trafficLight.setState(trafficLight.states!.prepareToGo);
     vi.advanceTimersByTime(lightContext.prepareToGoPeriod);
-    expect(trafficLight.value).toBe(trafficLight.states!.go);
+    expect(trafficLight.state).toBe(trafficLight.states!.go);
     expect(lightContext.trafficRed).toBe(false);
     expect(lightContext.trafficAmber).toBe(false);
     expect(lightContext.trafficGreen).toBe(true);
@@ -311,7 +313,7 @@ describe('traffic light state machine', () => {
   test('when go, transitions to prepareToStop', () => {
     trafficLight.setState(trafficLight.states!.go);
     trafficLight.send('STOP');
-    expect(trafficLight.value).toBe(trafficLight.states!.prepareToStop);
+    expect(trafficLight.state).toBe(trafficLight.states!.prepareToStop);
     expect(lightContext.trafficRed).toBe(false);
     expect(lightContext.trafficAmber).toBe(true);
     expect(lightContext.trafficGreen).toBe(false);
@@ -322,7 +324,7 @@ describe('traffic light state machine', () => {
   test('when prepareToStop, transitions to stopped', () => {
     trafficLight.setState(trafficLight.states!.prepareToStop);
     vi.advanceTimersByTime(lightContext.prepareToStopPeriod);
-    expect(trafficLight.value).toBe(trafficLight.states!.stopped);
+    expect(trafficLight.state).toBe(trafficLight.states!.stopped);
     expect(lightContext.trafficRed).toBe(true);
     expect(lightContext.trafficAmber).toBe(false);
     expect(lightContext.trafficGreen).toBe(false);
