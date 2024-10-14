@@ -2,24 +2,24 @@
 
 type Context = Record<string, any>; // Modify this based on your actual context structure
 
-interface Action {
+type Action = {
   (context: Context): void;
   guard?: (context: Context) => boolean; // Optional guard property
-}
+};
 
-interface After {
+type After = {
   delay: number | ((context: Context) => number);
   target: () => State;
   guard?: (context: Context) => boolean; // Optional guard property
-}
+};
 
-interface EventHandler {
+type EventHandler = {
   target: () => State;
   data?: (context: Context) => any;
   guard?: (context: Context) => boolean; // Optional guard property
-}
+};
 
-interface StateDefinition {
+type StateDefinition = {
   context: Context;
   action?: Action;
   after?: After;
@@ -27,9 +27,9 @@ interface StateDefinition {
   states?: Record<string, StateDefinition>;
   state?: StateDefinition;
   parallel?: boolean;
-}
+};
 
-export interface State {
+export type State = {
   send: (event: string, data?: any) => void;
   setState: (newState: StateDefinition) => void;
   context: Context;
@@ -40,7 +40,7 @@ export interface State {
   state?: StateDefinition;
   activeStates?: Record<string, State>;
   parallel?: boolean;
-}
+};
 
 // Strongly typed `createState` function
 export function createState(definition: StateDefinition): State {
@@ -52,7 +52,7 @@ export function createState(definition: StateDefinition): State {
     after: definition.after,
     on: definition.on,
     states: definition.states ? {} : undefined,
-    state: definition.state,
+    state: definition.parallel ? undefined : definition.state,
     activeStates: definition.parallel ? {} : undefined,
     parallel: definition.parallel,
   };
@@ -66,10 +66,11 @@ export function createState(definition: StateDefinition): State {
         state.activeStates![stateKey].context = state.context;
       });
 
-      // Set the initial state for parallel states
-      state.state = state.activeStates![Object.keys(state.activeStates!)[0]].state;
+      if (definition.state) {
+        throw new Error('state not value for parallel states');
+      }
 
-      // // Handle setting parallel states
+      // Handle setting parallel states
       state.setState = (newState: StateDefinition) => {
         throw new Error('setState not valid');
       };
