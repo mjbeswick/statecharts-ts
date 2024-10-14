@@ -69,25 +69,9 @@ export function createState(definition: StateDefinition): State {
       // Set the initial state for parallel states
       state.state = state.activeStates![Object.keys(state.activeStates!)[0]].state;
 
-      // Handle setting parallel states
+      // // Handle setting parallel states
       state.setState = (newState: StateDefinition) => {
-        Object.keys(state.activeStates!).forEach((key) => {
-          if (state.activeStates![key].state === newState) {
-            state.activeStates![key].setState(newState);
-            state.state = newState;
-          }
-        });
-
-        if (!newState.action?.guard || newState.action.guard(state.context)) {
-          if (newState.action) newState.action(state.context);
-        }
-        if (newState.after && (!newState.after.guard || newState.after.guard(state.context))) {
-          const delay =
-            typeof newState.after.delay === 'function'
-              ? newState.after.delay(state.context)
-              : newState.after.delay;
-          setTimeout(() => state.setState(newState.after!.target()), delay);
-        }
+        throw new Error('setState not valid');
       };
 
       // Handle send for parallel states
@@ -110,7 +94,9 @@ export function createState(definition: StateDefinition): State {
 
       state.setState = (newState: StateDefinition) => {
         if (!newState.action?.guard || newState.action.guard(state.context)) {
-          if (newState.action) newState.action(state.context);
+          if (newState.action) {
+            newState.action(state.context);
+          }
         }
         if (newState.after && (!newState.after.guard || newState.after.guard(state.context))) {
           const delay =

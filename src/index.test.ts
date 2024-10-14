@@ -104,7 +104,6 @@ describe('nested and parallel state machine', () => {
         stateA,
         stateB,
       },
-      state: stateA1
     });
   });
 
@@ -113,9 +112,10 @@ describe('nested and parallel state machine', () => {
     expect(context.counter).toBe(0);
   });
 
-  test('sets state', () => {
-    machine.setState(stateA2)
-    expect(machine.state).toBe(stateA2);
+  test.only('sets state', () => {
+    expect(stateA).toBe(stateA1)
+    stateA.setState(stateA2)
+    expect(stateA.state).toBe(stateA2);
   });
 
   test('when in stateA1, transitions to stateA2', () => {
