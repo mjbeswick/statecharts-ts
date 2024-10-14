@@ -43,7 +43,7 @@ export type State = {
 };
 
 // Strongly typed `createState` function
-export function createState(definition: StateDefinition): State {
+export function createState(definition: StateDefinition, parent?: State): State {
   const state: State = {
     send: () => { },
     setState: () => { },
@@ -88,9 +88,9 @@ export function createState(definition: StateDefinition): State {
         });
       };
     } else {
-      // Non-parallel case (original logic)
+      // Non-parallel case (modified logic)
       Object.keys(definition.states).forEach((key) => {
-        state.states![key] = createState(definition.states![key]);
+        state.states![key] = createState(definition.states![key], state);
       });
 
       state.setState = (newState: StateDefinition) => {
@@ -120,6 +120,21 @@ export function createState(definition: StateDefinition): State {
             }
             state.setState(eventHandler.target());
           }
+        } else if (state.states) {
+          // Check if any child state can handle the event
+          Object.values(state.states).forEach((childState) => {
+            if (childState.state?.on && childState.state.on[event]) {
+              const eventHandler = childState.state.on[event];
+              if (!eventHandler.guard || eventHandler.guard(state.context)) {
+                if (eventHandler.data) {
+                  const payload = eventHandler.data(state.context);
+                  console.log('Payload:', payload);
+                }
+                state.setState(eventHandler.target());
+                return;
+              }
+            }
+          });
         } else {
           console.warn(`No transition defined for event '${event}'.`);
         }
@@ -136,7 +151,7 @@ export function createState(definition: StateDefinition): State {
       state.setState(definition.state);
     }
   } else {
-    // Single state case (no child states)
+    // Single state case (modified logic)
     state.setState = (newState: StateDefinition) => {
       if (!newState.action?.guard || newState.action.guard(state.context)) {
         if (newState.action) newState.action(state.context);
@@ -159,8 +174,14 @@ export function createState(definition: StateDefinition): State {
             const payload = eventHandler.data(state.context);
             console.log('Payload:', payload);
           }
-          state.setState(eventHandler.target());
+          if (parent) {
+            parent.setState(eventHandler.target());
+          } else {
+            state.setState(eventHandler.target());
+          }
         }
+      } else if (parent) {
+        parent.send(event, data);
       }
     };
   }
