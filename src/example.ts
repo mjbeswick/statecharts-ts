@@ -10,16 +10,34 @@ export type TrafficLightState =
     | 'waitingToStop'
     | 'readyToStop';
 
+// Define TrafficLightEvent as a union of event objects
 export type TrafficLightEvent =
     | { type: 'INITIALISED' }
     | { type: 'NEXT' }
     | { type: 'CROSS' };
 
+// Define Context Interface
+export interface TrafficLightContext {
+    trafficLight: string;
+    traffic: { red: boolean; amber: boolean; green: boolean };
+    pedestrian: { red: boolean; green: boolean };
+    timeoutPeriods: {
+        stop: number;
+        prepareToGo: number;
+        waitingToStop: number;
+        readyToStop: number;
+    };
+}
+
 // TrafficLightMachine Class Extending AbstractStateMachine
-export class TrafficLightMachine extends AbstractStateMachine<TrafficLightState, TrafficLightEvent, any> {
+export class TrafficLightMachine extends AbstractStateMachine<
+    TrafficLightState,
+    TrafficLightEvent,
+    TrafficLightContext
+> {
     protected currentState: TrafficLightState = 'initialising';
 
-    protected context = {
+    protected context: TrafficLightContext = {
         trafficLight: 'initialising',
         traffic: { red: false, amber: false, green: false },
         pedestrian: { red: true, green: false },
@@ -31,11 +49,11 @@ export class TrafficLightMachine extends AbstractStateMachine<TrafficLightState,
         },
     };
 
-    transitionMap: TransitionMap<TrafficLightState, TrafficLightEvent, typeof this.context> = {
+    protected transitionMap: TransitionMap<TrafficLightState, TrafficLightEvent, TrafficLightContext> = {
         initialising: {
             INITIALISED: {
                 target: 'stop',
-                enter: (context) => {
+                enter: (context: TrafficLightContext) => {
                     Object.assign(context, {
                         trafficLight: 'stop',
                         traffic: { red: true, amber: false, green: false },
@@ -49,7 +67,7 @@ export class TrafficLightMachine extends AbstractStateMachine<TrafficLightState,
         stop: {
             NEXT: {
                 target: 'prepareToGo',
-                enter: (context) => {
+                enter: (context: TrafficLightContext) => {
                     Object.assign(context, {
                         trafficLight: 'prepareToGo',
                         traffic: { red: true, amber: true, green: false },
@@ -63,7 +81,7 @@ export class TrafficLightMachine extends AbstractStateMachine<TrafficLightState,
         prepareToGo: {
             NEXT: {
                 target: 'go',
-                enter: (context) => {
+                enter: (context: TrafficLightContext) => {
                     Object.assign(context, {
                         trafficLight: 'go',
                         traffic: { red: false, amber: false, green: true },
@@ -76,7 +94,7 @@ export class TrafficLightMachine extends AbstractStateMachine<TrafficLightState,
         go: {
             CROSS: {
                 target: 'waitingToStop',
-                enter: (context) => {
+                enter: (context: TrafficLightContext) => {
                     console.log('Entering waitingToStop state... (Waiting to stop for pedestrians)');
                     setTimeout(() => this.send({ type: 'NEXT' }), context.timeoutPeriods.waitingToStop);
                 },
@@ -85,7 +103,7 @@ export class TrafficLightMachine extends AbstractStateMachine<TrafficLightState,
         waitingToStop: {
             NEXT: {
                 target: 'readyToStop',
-                enter: (context) => {
+                enter: (context: TrafficLightContext) => {
                     Object.assign(context, {
                         trafficLight: 'readyToStop',
                         traffic: { red: false, amber: true, green: false },
@@ -99,7 +117,7 @@ export class TrafficLightMachine extends AbstractStateMachine<TrafficLightState,
         readyToStop: {
             NEXT: {
                 target: 'stop',
-                enter: (context) => {
+                enter: (context: TrafficLightContext) => {
                     Object.assign(context, {
                         trafficLight: 'stop',
                         traffic: { red: true, amber: false, green: false },
@@ -116,8 +134,8 @@ export class TrafficLightMachine extends AbstractStateMachine<TrafficLightState,
 // Example usage
 const trafficLightMachine = new TrafficLightMachine();
 
-// Uncomment to subscribe to state changes
-trafficLightMachine.subscribe((state, context) => {
+// Subscribe to state changes
+trafficLightMachine.subscribe((state: TrafficLightState, context: TrafficLightContext) => {
     console.log('State:', state, 'with context:', context);
 });
 
@@ -127,7 +145,9 @@ trafficLightMachine.send({ type: 'INITIALISED' });
 
 // Setup readline to handle user input
 readline.emitKeypressEvents(process.stdin);
-process.stdin.setRawMode(true);
+if (process.stdin.isTTY) {
+    process.stdin.setRawMode(true);
+}
 
 process.stdin.on('keypress', (_, key) => {
     if (key.ctrl && key.name === 'c') {

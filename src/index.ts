@@ -14,27 +14,35 @@ export type StateTransition<S, C> = {
 };
 
 /**
-* A map that defines valid transitions for each state and event.
-* 
-* @template S - Type of the state (can be string, number, or symbol).
-* @template E - Type of the event (contains a 'type' property to determine the transition).
-* @template C - Type of the context (represents additional information used during transitions).
-*/
-export type TransitionMap<S extends string | number | symbol, E extends { type: string }, C> = {
-    [K in S]?: {
-        [T in E['type']]?: StateTransition<S, C>;
+ * A map that defines valid transitions for each state and event.
+ * 
+ * @template S - Type of the state (can be string, number, or symbol).
+ * @template E - Type of the event (contains a 'type' property to determine the transition).
+ * @template C - Type of the context (represents additional information used during transitions).
+ */
+export type TransitionMap<
+    S extends string | number | symbol,
+    E extends { type: string },
+    C
+> = {
+        [K in S]?: {
+            [T in E['type']]?: StateTransition<S, C>;
+        };
     };
-};
 
 /**
-* Abstract class that represents a finite state machine. It provides core functionality to manage state transitions,
-* handle context, and notify subscribers of state changes.
-* 
-* @template S - Type of the state (can be string, number, or symbol).
-* @template E - Type of the event (contains a 'type' property to determine the transition).
-* @template C - Type of the context (represents additional information used during transitions).
-*/
-export abstract class AbstractStateMachine<S extends string | number | symbol, E extends { type: string }, C> {
+ * Abstract class that represents a finite state machine. It provides core functionality to manage state transitions,
+ * handle context, and notify subscribers of state changes.
+ * 
+ * @template S - Type of the state (can be string, number, or symbol).
+ * @template E - Type of the event (contains a 'type' property to determine the transition).
+ * @template C - Type of the context (represents additional information used during transitions).
+ */
+export abstract class AbstractStateMachine<
+    S extends string | number | symbol,
+    E extends { type: string },
+    C
+> {
     /** Current state of the state machine. */
     protected abstract currentState: S;
 
@@ -72,15 +80,12 @@ export abstract class AbstractStateMachine<S extends string | number | symbol, E
      */
     public send(event: E): void {
         const stateKey = this.currentState;
-        const eventKey = event.type as keyof TransitionMap<S, E, C>[S];
-
         const stateTransitions = this.transitionMap[stateKey];
 
-        // Ensure that stateTransitions is not undefined
-        if (stateTransitions && event.type in stateTransitions) {
+        if (stateTransitions) {
+            const eventKey = event.type as keyof typeof stateTransitions;
             const transition = stateTransitions[eventKey];
 
-            // Ensure that the transition is defined before proceeding
             if (transition) {
                 if (transition.exit) {
                     transition.exit(this.context);
