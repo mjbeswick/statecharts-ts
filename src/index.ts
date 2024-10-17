@@ -1,190 +1,117 @@
-// Define the types for the State Machine
-
-type Context = Record<string, any>; // Modify this based on your actual context structure
-
-type Action = {
-  (context: Context): void;
-  guard?: (context: Context) => boolean; // Optional guard property
+/**
+ * Defines the structure for state transitions, including target state and optional enter/exit actions.
+ * 
+ * @template S - Type of the state (can be string, number, or symbol).
+ * @template C - Type of the context (represents additional information used during transitions).
+ */
+export type StateTransition<S, C> = {
+    /** Target state to transition to. */
+    target: S;
+    /** Optional action to perform when entering the new state. */
+    enter?: (context: C) => void;
+    /** Optional action to perform when exiting the current state. */
+    exit?: (context: C) => void;
 };
 
-type After = {
-  delay: number | ((context: Context) => number);
-  target: () => State;
-  guard?: (context: Context) => boolean; // Optional guard property
+/**
+* A map that defines valid transitions for each state and event.
+* 
+* @template S - Type of the state (can be string, number, or symbol).
+* @template E - Type of the event (contains a 'type' property to determine the transition).
+* @template C - Type of the context (represents additional information used during transitions).
+*/
+export type TransitionMap<S extends string | number | symbol, E extends { type: string }, C> = {
+    [K in S]?: {
+        [T in E['type']]?: StateTransition<S, C>;
+    };
 };
 
-type EventHandler = {
-  target: () => State;
-  data?: (context: Context) => any;
-  guard?: (context: Context) => boolean; // Optional guard property
-};
+/**
+* Abstract class that represents a finite state machine. It provides core functionality to manage state transitions,
+* handle context, and notify subscribers of state changes.
+* 
+* @template S - Type of the state (can be string, number, or symbol).
+* @template E - Type of the event (contains a 'type' property to determine the transition).
+* @template C - Type of the context (represents additional information used during transitions).
+*/
+export abstract class AbstractStateMachine<S extends string | number | symbol, E extends { type: string }, C> {
+    /** Current state of the state machine. */
+    protected abstract currentState: S;
 
-type StateDefinition = {
-  context: Context;
-  action?: Action;
-  after?: After;
-  on?: Record<string, EventHandler>;
-  states?: Record<string, StateDefinition>;
-  state?: StateDefinition;
-  parallel?: boolean;
-};
+    /** Context that holds additional information related to the state machine. */
+    protected abstract context: C;
 
-export type State = {
-  send: (event: string, data?: any) => void;
-  setState: (newState: StateDefinition) => void;
-  context: Context;
-  action?: Action;
-  after?: After;
-  on?: Record<string, EventHandler>;
-  states?: Record<string, State>;
-  state?: StateDefinition;
-  activeStates?: Record<string, State>;
-  parallel?: boolean;
-};
+    /** Transition map that defines the possible state transitions and associated actions. */
+    protected abstract transitionMap: TransitionMap<S, E, C>;
 
-// Strongly typed `createState` function
-export function createState(definition: StateDefinition, parent?: State): State {
-  const state: State = {
-    send: () => { },
-    setState: () => { },
-    context: definition.context,
-    action: definition.action,
-    after: definition.after,
-    on: definition.on,
-    states: definition.states ? {} : undefined,
-    state: definition.parallel ? undefined : definition.state,
-    activeStates: definition.parallel ? {} : undefined,
-    parallel: definition.parallel,
-  };
+    /** List of subscribers to notify of state changes. */
+    private subscribers: ((state: S, context: C) => void)[] = [];
 
-  if (definition.states) {
-    if (state.parallel) {
-      // Initialize each parallel sub-state
-      Object.keys(definition.states).forEach((stateKey) => {
-        const subStateDef = definition.states![stateKey];
-        state.activeStates![stateKey] = createState(subStateDef);
-        state.activeStates![stateKey].context = state.context;
-      });
+    /**
+     * Gets the current state of the state machine.
+     * 
+     * @returns {S} The current state.
+     */
+    public getState(): S {
+        return this.currentState;
+    }
 
-      if (definition.state) {
-        throw new Error('state not value for parallel states');
-      }
+    /**
+     * Gets the current context of the state machine.
+     * 
+     * @returns {C} The current context.
+     */
+    public getContext(): C {
+        return this.context;
+    }
 
-      // Handle setting parallel states
-      state.setState = (newState: StateDefinition) => {
-        throw new Error('setState not valid');
-      };
+    /**
+     * Sends an event to the state machine, triggering a state transition if a valid transition is defined.
+     * 
+     * @param {E} event - The event to trigger a state transition.
+     */
+    public send(event: E): void {
+        const stateKey = this.currentState;
+        const eventKey = event.type as keyof TransitionMap<S, E, C>[S];
 
-      // Handle send for parallel states
-      state.send = (event: string, data?: any) => {
-        Object.values(state.activeStates!).forEach((activeState) => {
-          if (activeState.on && activeState.on[event]) {
-            const eventHandler = activeState.on[event];
-            if (!eventHandler.guard || eventHandler.guard(state.context)) {
-              activeState.setState(eventHandler.target());
-              state.state = activeState.state;
-            }
-          }
-        });
-      };
-    } else {
-      // Non-parallel case (modified logic)
-      Object.keys(definition.states).forEach((key) => {
-        state.states![key] = createState(definition.states![key], state);
-      });
+        const stateTransitions = this.transitionMap[stateKey];
 
-      state.setState = (newState: StateDefinition) => {
-        if (!newState.action?.guard || newState.action.guard(state.context)) {
-          if (newState.action) {
-            newState.action(state.context);
-          }
-        }
-        if (newState.after && (!newState.after.guard || newState.after.guard(state.context))) {
-          const delay =
-            typeof newState.after.delay === 'function'
-              ? newState.after.delay(state.context)
-              : newState.after.delay;
-          setTimeout(() => state.setState(newState.after!.target()), delay);
-        }
-        state.state = newState;
-      };
+        // Ensure that stateTransitions is not undefined
+        if (stateTransitions && event.type in stateTransitions) {
+            const transition = stateTransitions[eventKey];
 
-      state.send = (event: string, data?: any) => {
-        const currentState = state.state;
-        if (currentState?.on && currentState.on[event]) {
-          const eventHandler = currentState.on[event];
-          if (!eventHandler.guard || eventHandler.guard(state.context)) {
-            if (eventHandler.data) {
-              const payload = eventHandler.data(state.context);
-              console.log('Payload:', payload);
-            }
-            state.setState(eventHandler.target());
-          }
-        } else if (state.states) {
-          // Check if any child state can handle the event
-          Object.values(state.states).forEach((childState) => {
-            if (childState.state?.on && childState.state.on[event]) {
-              const eventHandler = childState.state.on[event];
-              if (!eventHandler.guard || eventHandler.guard(state.context)) {
-                if (eventHandler.data) {
-                  const payload = eventHandler.data(state.context);
-                  console.log('Payload:', payload);
+            // Ensure that the transition is defined before proceeding
+            if (transition) {
+                if (transition.exit) {
+                    transition.exit(this.context);
                 }
-                state.setState(eventHandler.target());
-                return;
-              }
+                if (transition.enter) {
+                    transition.enter(this.context);
+                }
+                this.currentState = transition.target;
+                this.notifySubscribers();
             }
-          });
-        } else {
-          console.warn(`No transition defined for event '${event}'.`);
         }
-      };
-
-      if (!definition.state) {
-        throw new Error(
-          "Initial state must be defined when 'states' are provided."
-        );
-      }
     }
 
-    if (definition.state) {
-      state.setState(definition.state);
+    /**
+     * Subscribes to state changes of the state machine. When a state transition occurs,
+     * the callback function is called with the new state and context.
+     * 
+     * @param {(state: S, context: C) => void} callback - The function to call when the state changes.
+     */
+    public subscribe(callback: (state: S, context: C) => void): void {
+        this.subscribers.push(callback);
     }
-  } else {
-    // Single state case (modified logic)
-    state.setState = (newState: StateDefinition) => {
-      if (!newState.action?.guard || newState.action.guard(state.context)) {
-        if (newState.action) newState.action(state.context);
-      }
-      if (newState.after && (!newState.after.guard || newState.after.guard(state.context))) {
-        const delay =
-          typeof newState.after.delay === 'function'
-            ? newState.after.delay(state.context)
-            : newState.after.delay;
-        setTimeout(() => state.setState(newState.after!.target()), delay);
-      }
-      state.state = newState;
-    };
 
-    state.send = (event: string, data?: any) => {
-      if (state.on && state.on[event]) {
-        const eventHandler = state.on[event];
-        if (!eventHandler.guard || eventHandler.guard(state.context)) {
-          if (eventHandler.data) {
-            const payload = eventHandler.data(state.context);
-            console.log('Payload:', payload);
-          }
-          if (parent) {
-            parent.setState(eventHandler.target());
-          } else {
-            state.setState(eventHandler.target());
-          }
+    /**
+     * Notifies all subscribers of the current state and context.
+     * 
+     * @private
+     */
+    private notifySubscribers(): void {
+        for (const subscriber of this.subscribers) {
+            subscriber(this.currentState, this.context);
         }
-      } else if (parent) {
-        parent.send(event, data);
-      }
-    };
-  }
-
-  return state;
+    }
 }

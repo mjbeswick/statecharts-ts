@@ -1,334 +1,123 @@
-import {
-  describe,
-  test,
-  beforeAll,
-  beforeEach,
-  afterAll,
-  vi,
-  expect,
-} from 'vitest';
-import { createState, type State } from './index';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { AbstractStateMachine, TransitionMap } from './index';
 
-describe('nested and parallel state machine', () => {
-  let machine: State;
-  let context: {
-    counter: number;
-  };
+// Define types for testing
+type TestState = 'idle' | 'active' | 'completed';
+type TestEvent = { type: 'START' } | { type: 'COMPLETE' } | { type: 'RESET' };
 
-  let stateA: State;
-  let stateA1: State;
-  let stateA2: State;
-  let stateB: State;
-  let stateB1: State;
-  let stateB2: State;
+// Define a concrete implementation of AbstractStateMachine for testing
+class TestStateMachine extends AbstractStateMachine<TestState, TestEvent, any> {
+    protected currentState: TestState = 'idle';
+    protected context = { count: 0 };
 
-  beforeAll(() => {
-    vi.useFakeTimers();
-  });
-
-  afterAll(() => {
-    vi.useRealTimers();
-  });
-
-  beforeEach(() => {
-    context = {
-      counter: 0,
+    protected transitionMap: TransitionMap<TestState, TestEvent, typeof this.context> = {
+        idle: {
+            START: {
+                target: 'active',
+                enter: (context) => {
+                    context.count += 1;
+                },
+                exit: () => {
+                    // Optional exit action for state 'idle'
+                }
+            },
+        },
+        active: {
+            COMPLETE: {
+                target: 'completed',
+                enter: (context) => {
+                    context.count += 10;
+                },
+            },
+            RESET: {
+                target: 'idle',
+                enter: (context) => {
+                    context.count = 0;
+                },
+            },
+        },
+        completed: {
+            RESET: {
+                target: 'idle',
+                enter: (context) => {
+                    context.count = 0;
+                },
+            },
+        }
     };
 
-    stateA1 = createState({
-      context,
-      on: {
-        NEXT: {
-          target: () => stateA2,
-        },
-      },
+    // Getter for accessing the transition map in tests
+    public getTransitionMap() {
+        return this.transitionMap;
+    }
+}
+
+// Test suite for AbstractStateMachine
+describe('AbstractStateMachine', () => {
+    let stateMachine: TestStateMachine;
+
+    beforeEach(() => {
+        // Instantiate the state machine before each test
+        stateMachine = new TestStateMachine();
     });
 
-    stateA2 = createState({
-      context,
-      action: (context) => {
-        console.log('action 2');
-        context.counter = 2;
-      },
-      on: {
-        NEXT: {
-          target: () => stateA1,
-        },
-      },
+    it('should initialize with the correct initial state and context', () => {
+        expect(stateMachine.getState()).toBe('idle');
+        expect(stateMachine.getContext()).toEqual({ count: 0 });
     });
 
-    stateA = createState({
-      context,
-      states: {
-        stateA1,
-        stateA2,
-      },
-      state: stateA1,
+    it('should transition from idle to active when START event is sent', () => {
+        stateMachine.send({ type: 'START' });
+        expect(stateMachine.getState()).toBe('active');
+        expect(stateMachine.getContext().count).toBe(1);
     });
 
-    stateB1 = createState({
-      context,
-      on: {
-        NEXT: {
-          target: () => stateB2,
-        },
-      },
+    it('should transition from active to completed when COMPLETE event is sent', () => {
+        stateMachine.send({ type: 'START' });
+        stateMachine.send({ type: 'COMPLETE' });
+        expect(stateMachine.getState()).toBe('completed');
+        expect(stateMachine.getContext().count).toBe(11);
     });
 
-    stateB2 = createState({
-      context,
-      action: (context) => {
-        console.log('action 4');
-        context.counter = 4;
-      },
-      on: {
-        NEXT: {
-          target: () => stateB1,
-        },
-      },
+    it('should reset to idle state from completed state when RESET event is sent', () => {
+        stateMachine.send({ type: 'START' });
+        stateMachine.send({ type: 'COMPLETE' });
+        stateMachine.send({ type: 'RESET' });
+        expect(stateMachine.getState()).toBe('idle');
+        expect(stateMachine.getContext().count).toBe(0);
     });
 
-    stateB = createState({
-      context,
-      states: {
-        stateB1,
-        stateB2,
-      },
-      state: stateB1,
+    it('should notify subscribers on state change', () => {
+        const subscriber = vi.fn();
+        stateMachine.subscribe(subscriber);
+
+        stateMachine.send({ type: 'START' });
+        expect(subscriber).toHaveBeenCalledWith('active', stateMachine.getContext());
+
+        stateMachine.send({ type: 'COMPLETE' });
+        expect(subscriber).toHaveBeenCalledWith('completed', stateMachine.getContext());
     });
 
-    machine = createState({
-      context,
-      parallel: true,
-      states: {
-        stateA,
-        stateB,
-      },
-    });
-  });
-
-  test('starts in stateA1', () => {
-    expect(machine.state).toBe(stateA1);
-    expect(context.counter).toBe(0);
-  });
-
-  test('sets state', () => {
-    expect(stateA.state).toBe(stateA1)
-    stateA.setState(stateA2)
-    expect(stateA.state).toBe(stateA2);
-  });
-
-  test.only('when in stateA1, transitions to stateA2', () => {
-    stateA1.send('NEXT')
-    expect(stateA.state).toBe(stateA2);
-    expect(context.counter).toBe(2);
-  });
-
-  test('when in stateA2, transitions to stateA1', () => {
-    machine.setState(stateA2);
-    machine.send('NEXT');
-    expect(machine.state).toBe(stateA1);
-    expect(context.counter).toBe(4);
-  });
-
-  test('when in stateB1, transitions to stateB2', () => {
-    machine.setState(stateB1);
-    machine.send('NEXT');
-    expect(machine.state).toBe(stateB2);
-    expect(context.counter).toBe(7);
-  });
-
-  test('when in stateB2, transitions to stateB1', () => {
-    machine.setState(stateB2);
-    machine.send('NEXT');
-    expect(machine.state).toBe(stateB1);
-    expect(context.counter).toBe(8);
-  });
-
-  test('when in stateA1 and stateB1, transitions to stateA2 and stateB2', () => {
-    machine.setState(stateA1);
-    machine.send('NEXT');
-    machine.setState(stateB1);
-    machine.send('NEXT');
-    expect(machine.state).toBe(machine.state);
-    expect(context.counter).toBe(8);
-  });
-});
-
-describe('traffic light state machine', () => {
-  // UK traffic light sequence
-  // 1. Stop - Traffic light red, pedestrian light green
-  // 2. Prepare to go - Traffic light amber, pedestrian light red
-  // 3. Go - Traffic light green, pedestrian light red
-  // 4. Prepare to stop - Traffic light amber, pedestrian light red
-
-  let trafficLight: State;
-  let lightContext: {
-    prepareToGoPeriod: number;
-    prepareToStopPeriod: number;
-    stopPeriod: number;
-    trafficRed: boolean;
-    trafficAmber: boolean;
-    trafficGreen: boolean;
-    pedestrianRed: boolean;
-    pedestrianGreen: boolean;
-  };
-
-  beforeAll(() => {
-    vi.useFakeTimers();
-  });
-
-  afterAll(() => {
-    vi.useRealTimers();
-  });
-
-  beforeEach(() => {
-    lightContext = {
-      prepareToGoPeriod: 3_000,
-      prepareToStopPeriod: 10_000,
-      stopPeriod: 10_000,
-      trafficRed: true,
-      trafficAmber: false,
-      trafficGreen: false,
-      pedestrianRed: false,
-      pedestrianGreen: true,
-    };
-
-    const stopped = createState({
-      context: lightContext,
-      action: (context) => {
-        context.trafficRed = true;
-        context.trafficAmber = false;
-        context.trafficGreen = false;
-        context.pedestrianRed = false;
-        context.pedestrianGreen = true;
-      },
-      after: {
-        delay: (context) => context.stopPeriod,
-        target: () => prepareToGo,
-      },
+    it('should not transition if event is not valid for current state', () => {
+        stateMachine.send({ type: 'COMPLETE' });
+        expect(stateMachine.getState()).toBe('idle'); // No transition should happen
     });
 
-    const prepareToGo = createState({
-      context: lightContext,
-      action: (context) => {
-        context.trafficRed = false;
-        context.trafficAmber = true;
-        context.trafficGreen = false;
-        context.pedestrianRed = true;
-        context.pedestrianGreen = false;
-      },
-      after: {
-        delay: (context) => context.prepareToGoPeriod,
-        target: () => go,
-      },
+    it('should execute enter and exit actions correctly', () => {
+        // Use the new getter method to safely access the transition map
+        const transitionMap = stateMachine.getTransitionMap();
+
+        if (transitionMap.idle && transitionMap.idle.START) {
+            const enterSpy = vi.fn();
+            const exitSpy = vi.fn();
+
+            transitionMap.idle.START.enter = enterSpy;
+            transitionMap.idle.START.exit = exitSpy;
+
+            stateMachine.send({ type: 'START' });
+
+            expect(enterSpy).toHaveBeenCalled();
+            expect(exitSpy).not.toHaveBeenCalled(); // In this case, no explicit 'exit' function is defined
+        }
     });
-
-    const go = createState({
-      context: lightContext,
-      action: (context) => {
-        context.trafficRed = false;
-        context.trafficAmber = false;
-        context.trafficGreen = true;
-        context.pedestrianRed = true;
-        context.pedestrianGreen = false;
-      },
-      on: {
-        STOP: {
-          target: () => prepareToStop,
-        },
-      },
-    });
-
-    const prepareToStop = createState({
-      context: lightContext,
-      action: (context) => {
-        context.trafficRed = false;
-        context.trafficAmber = true;
-        context.trafficGreen = false;
-        context.pedestrianRed = true;
-        context.pedestrianGreen = false;
-      },
-      after: {
-        delay: (context) => context.prepareToStopPeriod,
-        target: () => stopped,
-      },
-    });
-
-    // Create the state machine with states
-    trafficLight = createState({
-      context: lightContext,
-      states: {
-        stopped,
-        prepareToGo,
-        go,
-        prepareToStop,
-      },
-      state: stopped, // Initial state
-    });
-  });
-
-  test('starts in stopped state', () => {
-    expect(trafficLight.state).toBe(trafficLight.state);
-    expect(lightContext.trafficRed).toBe(true);
-    expect(lightContext.trafficAmber).toBe(false);
-    expect(lightContext.trafficGreen).toBe(false);
-    expect(lightContext.pedestrianRed).toBe(false);
-    expect(lightContext.pedestrianGreen).toBe(true);
-  });
-
-  test('when stopped, transitions to prepareToGo', () => {
-    trafficLight.setState(trafficLight);
-    vi.advanceTimersByTime(lightContext.stopPeriod);
-    expect(trafficLight.state).toBe(trafficLight.state);
-    expect(lightContext.trafficRed).toBe(false);
-    expect(lightContext.trafficAmber).toBe(true);
-    expect(lightContext.trafficGreen).toBe(false);
-    expect(lightContext.pedestrianRed).toBe(true);
-    expect(lightContext.pedestrianGreen).toBe(false);
-  });
-
-  test('when stopped, transitions to prepareToGo', () => {
-    trafficLight.setState(trafficLight);
-    vi.advanceTimersByTime(lightContext.stopPeriod);
-    expect(trafficLight.state).toBe(trafficLight.state);
-    expect(lightContext.trafficRed).toBe(false);
-    expect(lightContext.trafficAmber).toBe(true);
-    expect(lightContext.trafficGreen).toBe(false);
-    expect(lightContext.pedestrianRed).toBe(true);
-    expect(lightContext.pedestrianGreen).toBe(false);
-  });
-
-  test('when prepareToGo, transitions to go', () => {
-    trafficLight.setState(trafficLight.states!.prepareToGo);
-    vi.advanceTimersByTime(lightContext.prepareToGoPeriod);
-    expect(trafficLight.state).toBe(trafficLight.states!.go);
-    expect(lightContext.trafficRed).toBe(false);
-    expect(lightContext.trafficAmber).toBe(false);
-    expect(lightContext.trafficGreen).toBe(true);
-    expect(lightContext.pedestrianRed).toBe(true);
-    expect(lightContext.pedestrianGreen).toBe(false);
-  });
-
-  test('when go, transitions to prepareToStop', () => {
-    trafficLight.setState(trafficLight.states!.go);
-    trafficLight.send('STOP');
-    expect(trafficLight.state).toBe(trafficLight.states!.prepareToStop);
-    expect(lightContext.trafficRed).toBe(false);
-    expect(lightContext.trafficAmber).toBe(true);
-    expect(lightContext.trafficGreen).toBe(false);
-    expect(lightContext.pedestrianRed).toBe(true);
-    expect(lightContext.pedestrianGreen).toBe(false);
-  });
-
-  test('when prepareToStop, transitions to stopped', () => {
-    trafficLight.setState(trafficLight.states!.prepareToStop);
-    vi.advanceTimersByTime(lightContext.prepareToStopPeriod);
-    expect(trafficLight.state).toBe(trafficLight.states!.stopped);
-    expect(lightContext.trafficRed).toBe(true);
-    expect(lightContext.trafficAmber).toBe(false);
-    expect(lightContext.trafficGreen).toBe(false);
-    expect(lightContext.pedestrianRed).toBe(false);
-    expect(lightContext.pedestrianGreen).toBe(true);
-  });
 });
