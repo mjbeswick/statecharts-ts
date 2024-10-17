@@ -1,122 +1,69 @@
-/**
- * Defines the structure for state transitions, including target state and optional enter/exit actions.
- * 
- * @template S - Type of the state (can be string, number, or symbol).
- * @template C - Type of the context (represents additional information used during transitions).
- */
-export type StateTransition<S, C> = {
-    /** Target state to transition to. */
+// src/index.ts
+
+export type StateTransition<S extends string, E extends { type: string }, C> = {
     target: S;
-    /** Optional action to perform when entering the new state. */
-    enter?: (context: C) => void;
-    /** Optional action to perform when exiting the current state. */
-    exit?: (context: C) => void;
+    enter?: (context: C, event: E) => void;
+    exit?: (context: C, event: E) => void;
 };
 
-/**
- * A map that defines valid transitions for each state and event.
- * 
- * @template S - Type of the state (can be string, number, or symbol).
- * @template E - Type of the event (contains a 'type' property to determine the transition).
- * @template C - Type of the context (represents additional information used during transitions).
- */
-export type TransitionMap<
-    S extends string | number | symbol,
-    E extends { type: string },
-    C
-> = {
-        [K in S]?: {
-            [T in E['type']]?: StateTransition<S, C>;
-        };
+export type TransitionMap<S extends string, E extends { type: string }, C> = {
+    [K in S]?: {
+        [T in E['type']]?: StateTransition<S, E, C>;
     };
+};
 
-/**
- * Abstract class that represents a finite state machine. It provides core functionality to manage state transitions,
- * handle context, and notify subscribers of state changes.
- * 
- * @template S - Type of the state (can be string, number, or symbol).
- * @template E - Type of the event (contains a 'type' property to determine the transition).
- * @template C - Type of the context (represents additional information used during transitions).
- */
-export abstract class AbstractStateMachine<
-    S extends string | number | symbol,
+export function createStateMachine<
+    S extends string,
     E extends { type: string },
     C
-> {
-    /** Current state of the state machine. */
-    protected abstract currentState: S;
+>(config: {
+    initialState: S;
+    context: C;
+    transitionMap: TransitionMap<S, E, C>;
+}) {
+    let currentState = config.initialState;
+    let context = config.context;
+    const subscribers: Array<(state: S, context: C) => void> = [];
 
-    /** Context that holds additional information related to the state machine. */
-    protected abstract context: C;
-
-    /** Transition map that defines the possible state transitions and associated actions. */
-    protected abstract transitionMap: TransitionMap<S, E, C>;
-
-    /** List of subscribers to notify of state changes. */
-    private subscribers: ((state: S, context: C) => void)[] = [];
-
-    /**
-     * Gets the current state of the state machine.
-     * 
-     * @returns {S} The current state.
-     */
-    public getState(): S {
-        return this.currentState;
+    function getState() {
+        return currentState;
     }
 
-    /**
-     * Gets the current context of the state machine.
-     * 
-     * @returns {C} The current context.
-     */
-    public getContext(): C {
-        return this.context;
+    function getContext() {
+        return context;
     }
 
-    /**
-     * Sends an event to the state machine, triggering a state transition if a valid transition is defined.
-     * 
-     * @param {E} event - The event to trigger a state transition.
-     */
-    public send(event: E): void {
-        const stateKey = this.currentState;
-        const stateTransitions = this.transitionMap[stateKey];
-
+    function send(event: E) {
+        const stateTransitions = config.transitionMap[currentState];
         if (stateTransitions) {
-            const eventKey = event.type as keyof typeof stateTransitions;
-            const transition = stateTransitions[eventKey];
-
+            const transition = stateTransitions[event.type as keyof typeof stateTransitions] as StateTransition<S, E, C> | undefined;
             if (transition) {
                 if (transition.exit) {
-                    transition.exit(this.context);
+                    transition.exit(context, event);
                 }
                 if (transition.enter) {
-                    transition.enter(this.context);
+                    transition.enter(context, event);
                 }
-                this.currentState = transition.target;
-                this.notifySubscribers();
+                currentState = transition.target;
+                notifySubscribers();
             }
         }
     }
 
-    /**
-     * Subscribes to state changes of the state machine. When a state transition occurs,
-     * the callback function is called with the new state and context.
-     * 
-     * @param {(state: S, context: C) => void} callback - The function to call when the state changes.
-     */
-    public subscribe(callback: (state: S, context: C) => void): void {
-        this.subscribers.push(callback);
+    function subscribe(callback: (state: S, context: C) => void) {
+        subscribers.push(callback);
     }
 
-    /**
-     * Notifies all subscribers of the current state and context.
-     * 
-     * @private
-     */
-    private notifySubscribers(): void {
-        for (const subscriber of this.subscribers) {
-            subscriber(this.currentState, this.context);
+    function notifySubscribers() {
+        for (const subscriber of subscribers) {
+            subscriber(currentState, context);
         }
     }
+
+    return {
+        getState,
+        getContext,
+        send,
+        subscribe,
+    };
 }
