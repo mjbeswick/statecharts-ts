@@ -15,7 +15,7 @@ type TrafficLightState =
 type TrafficLightEvent =
     | { type: 'INITIALISED' }
     | { type: 'NEXT' }
-    | { type: 'CROSS' };
+    | { type: 'STOP' };
 
 // Define your context
 const trafficLightContext = {
@@ -37,7 +37,7 @@ const trafficLightTransitions: TransitionMap<TrafficLightState, TrafficLightEven
     initialising: {
         INITIALISED: {
             target: 'stop',
-            enter: (context) => {
+            action: (context) => {
                 Object.assign(context, {
                     trafficLight: 'stop',
                     traffic: { red: true, amber: false, green: false },
@@ -50,7 +50,7 @@ const trafficLightTransitions: TransitionMap<TrafficLightState, TrafficLightEven
     stop: {
         NEXT: {
             target: 'prepareToGo',
-            enter: (context) => {
+            action: (context) => {
                 Object.assign(context, {
                     trafficLight: 'prepareToGo',
                     traffic: { red: true, amber: true, green: false },
@@ -63,7 +63,7 @@ const trafficLightTransitions: TransitionMap<TrafficLightState, TrafficLightEven
     prepareToGo: {
         NEXT: {
             target: 'go',
-            enter: (context) => {
+            action: (context) => {
                 Object.assign(context, {
                     trafficLight: 'go',
                     traffic: { red: false, amber: false, green: true },
@@ -73,9 +73,9 @@ const trafficLightTransitions: TransitionMap<TrafficLightState, TrafficLightEven
         },
     },
     go: {
-        CROSS: {
+        STOP: {
             target: 'waitingToStop',
-            enter: (context) => {
+            action: (context) => {
                 setTimeout(() => trafficLightMachine.send({ type: 'NEXT' }), context.timeoutPeriods.waitingToStop);
             },
         },
@@ -83,7 +83,7 @@ const trafficLightTransitions: TransitionMap<TrafficLightState, TrafficLightEven
     waitingToStop: {
         NEXT: {
             target: 'readyToStop',
-            enter: (context) => {
+            action: (context) => {
                 Object.assign(context, {
                     trafficLight: 'readyToStop',
                     traffic: { red: false, amber: true, green: false },
@@ -96,7 +96,7 @@ const trafficLightTransitions: TransitionMap<TrafficLightState, TrafficLightEven
     readyToStop: {
         NEXT: {
             target: 'stop',
-            enter: (context) => {
+            action: (context) => {
                 Object.assign(context, {
                     trafficLight: 'stop',
                     traffic: { red: true, amber: false, green: false },
@@ -115,16 +115,12 @@ const trafficLightMachine = createStateMachine({
     transitionMap: trafficLightTransitions,
 });
 
-let lastUpdate = new Date().getTime();
 
 // Subscribe to state changes
 trafficLightMachine.subscribe((state, context) => {
-    // time in seconds since the start of the program
-    const relativeTime = ((new Date().getTime() - lastUpdate) / 1000).toFixed(0)
     const trafficLight = Object.entries(context.traffic).filter(([_, value]) => value).map(([key]) => key).join(' + ');
     const pedestrianLight = Object.entries(context.pedestrian).filter(([_, value]) => value).map(([key]) => key).join(' + ');
-    console.log(`${relativeTime}s ${state} (Traffic: ${trafficLight}, Pedestrian: ${pedestrianLight})`);
-    lastUpdate = new Date().getTime()
+    console.log(`${state} (Traffic: ${trafficLight}, Pedestrian: ${pedestrianLight})`);
 });
 
 // Setup readline to handle user input
@@ -138,11 +134,11 @@ process.stdin.on('keypress', (_, key) => {
         console.log('Exiting...');
         process.exit();
     } else if (key.name === 'space') {
-        console.log('Space pressed. Triggering CROSS event.');
-        trafficLightMachine.send({ type: 'CROSS' });
+        console.log('Space pressed. Triggering STOP event.');
+        trafficLightMachine.send({ type: 'STOP' });
     }
 });
 
-console.log('Press SPACE to trigger CROSS event. Press CTRL+C to exit.\n');
+console.log('Press SPACE to trigger STOP event. Press CTRL+C to exit.\n');
 
 trafficLightMachine.send({ type: 'INITIALISED' });

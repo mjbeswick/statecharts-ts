@@ -1,9 +1,7 @@
-// src/index.ts
-
 export type StateTransition<S extends string, E extends { type: string }, C> = {
     target: S;
-    enter?: (context: C, event: E) => void;
-    exit?: (context: C, event: E) => void;
+    guard?: (context: C, event: E) => boolean;
+    action?: (context: C, event: E) => (() => void) | void;
 };
 
 export type TransitionMap<S extends string, E extends { type: string }, C> = {
@@ -23,6 +21,7 @@ export function createStateMachine<
 }) {
     let currentState = config.initialState;
     let context = config.context;
+    let exitFn: (() => void) | undefined = undefined;
     const subscribers: Array<(state: S, context: C) => void> = [];
 
     function getState() {
@@ -38,14 +37,19 @@ export function createStateMachine<
         if (stateTransitions) {
             const transition = stateTransitions[event.type as keyof typeof stateTransitions] as StateTransition<S, E, C> | undefined;
             if (transition) {
-                if (transition.exit) {
-                    transition.exit(context, event);
+                if (!transition.guard || transition.guard(context, event)) {
+                    if (exitFn) {
+                        exitFn();
+                    }
+                    if (transition.action) {
+                        const result = transition.action(context, event);
+                        if (typeof result === 'function') {
+                            exitFn = result;
+                        }
+                    }
+                    currentState = transition.target;
+                    notifySubscribers();
                 }
-                if (transition.enter) {
-                    transition.enter(context, event);
-                }
-                currentState = transition.target;
-                notifySubscribers();
             }
         }
     }
