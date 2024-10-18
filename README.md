@@ -254,7 +254,7 @@ console.log(currentState); // ['on', 'hot']
 
 ## Complex Example
 
-Please refer to the [examples](examples) directory for more detailed and complex examples of using statecharts-ts.
+Please refer to the [examples](src/examples) directory for more detailed and complex examples of using statecharts-ts.
 
 ## Additional Resources on Statecharts
 
