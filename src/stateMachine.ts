@@ -1,3 +1,5 @@
+// src/stateMachine.ts
+
 /**
  * Represents a state transition in the state machine.
  * @template S - The type of the state.

@@ -1,5 +1,12 @@
 // src/examples/trafficLight.ts
 
+// Add introduction and instructions
+console.log('Welcome to the Traffic Light State Machine Simulation!');
+console.log('Instructions:');
+console.log('- The traffic light will cycle through its states automatically.');
+console.log('- Press SPACE to trigger the STOP event.');
+console.log('- Press CTRL+C to exit.\n');
+
 import { createStateMachine, TransitionMap } from '../index';
 import readline from 'readline';
 
