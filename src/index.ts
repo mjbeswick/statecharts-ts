@@ -105,10 +105,23 @@ export function createStateMachine<
         }
     }
 
+    function toJSON() {
+        return JSON.stringify({ state: currentState, context });
+    }
+
+    function fromJSON(json: string) {
+        const data = JSON.parse(json);
+        currentState = data.state;
+        context = data.context;
+        notifySubscribers();
+    }
+
     return {
         getState,
         getContext,
         send,
         subscribe,
+        toJSON,
+        fromJSON,
     };
 }
