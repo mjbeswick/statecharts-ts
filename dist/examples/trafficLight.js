@@ -1,20 +1,11 @@
-import { createStateMachine, TransitionMap } from './index';
-import readline from 'readline';
-
-// Define your states and events
-type TrafficLightState =
-    | 'initialising'
-    | 'stop'
-    | 'prepareToGo'
-    | 'go'
-    | 'waitingToStop'
-    | 'readyToStop';
-
-type TrafficLightEvent =
-    | { type: 'INITIALISED' }
-    | { type: 'NEXT' }
-    | { type: 'CROSS' };
-
+"use strict";
+// src/examples/trafficLight.ts
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+const index_1 = require("../index");
+const readline_1 = __importDefault(require("readline"));
 // Define your context
 const trafficLightContext = {
     trafficLight: 'initialising',
@@ -27,11 +18,8 @@ const trafficLightContext = {
         readyToStop: 2000,
     },
 };
-
-type TrafficLightContext = typeof trafficLightContext;
-
 // Define your transition map
-const trafficLightTransitions: TransitionMap<TrafficLightState, TrafficLightEvent, TrafficLightContext> = {
+const trafficLightTransitions = {
     initialising: {
         INITIALISED: {
             target: 'stop',
@@ -71,7 +59,7 @@ const trafficLightTransitions: TransitionMap<TrafficLightState, TrafficLightEven
         },
     },
     go: {
-        CROSS: {
+        STOP: {
             target: 'waitingToStop',
             action: (context) => {
                 setTimeout(() => trafficLightMachine.send({ type: 'NEXT' }), context.timeoutPeriods.waitingToStop);
@@ -105,38 +93,33 @@ const trafficLightTransitions: TransitionMap<TrafficLightState, TrafficLightEven
         },
     },
 };
-
 // Create your state machine instance
-const trafficLightMachine = createStateMachine({
-    initialState: 'initialising' as TrafficLightState,
+const trafficLightMachine = (0, index_1.createStateMachine)({
+    initialState: 'initialising',
     context: trafficLightContext,
     transitionMap: trafficLightTransitions,
 });
-
 // Subscribe to state changes
 trafficLightMachine.subscribe((state, context) => {
-    const trafficLightText = Object.entries(context.traffic).map(([key, value]) => `${key}: ${value}`).join(', ');
-    const pedestrianLightText = Object.entries(context.pedestrian).map(([key, value]) => `${key}: ${value}`).join(', ');
-    console.log(`actioning state: ${state}... (Traffic Light: ${trafficLightText}, Pedestrian Light: ${pedestrianLightText})`);
-    console.log('State:', state, 'with context:', context);
+    const trafficLight = Object.entries(context.traffic).filter(([_, value]) => value).map(([key]) => key).join(' + ');
+    const pedestrianLight = Object.entries(context.pedestrian).filter(([_, value]) => value).map(([key]) => key).join(' + ');
+    console.log(`${state} (Traffic: ${trafficLight}, Pedestrian: ${pedestrianLight})`);
 });
-
-console.log('Initial State:', trafficLightMachine.getState());
-
-trafficLightMachine.send({ type: 'INITIALISED' });
-
 // Setup readline to handle user input
-readline.emitKeypressEvents(process.stdin);
+readline_1.default.emitKeypressEvents(process.stdin);
 if (process.stdin.isTTY) {
     process.stdin.setRawMode(true);
 }
-
 process.stdin.on('keypress', (_, key) => {
     if (key.ctrl && key.name === 'c') {
         console.log('Exiting...');
         process.exit();
-    } else if (key.name === 'space') {
-        console.log('Space pressed. Triggering CROSS event.');
-        trafficLightMachine.send({ type: 'CROSS' });
+    }
+    else if (key.name === 'space') {
+        console.log('Space pressed. Triggering STOP event.');
+        trafficLightMachine.send({ type: 'STOP' });
     }
 });
+console.log('Press SPACE to trigger STOP event. Press CTRL+C to exit.\n');
+trafficLightMachine.send({ type: 'INITIALISED' });
+//# sourceMappingURL=trafficLight.js.map
