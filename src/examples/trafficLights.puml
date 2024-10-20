@@ -1,0 +1,37 @@
+@startuml Traffic Light State Machine
+
+[*] --> prepareToGo
+
+state prepareToGo {
+  traffic : red + amber
+  pedestrian : red
+}
+
+state stop {
+  traffic : red
+  pedestrian : green
+}
+
+state go {
+  traffic : green
+  pedestrian : red
+}
+
+state waitingToStop {
+  traffic : amber
+  pedestrian : red
+}
+
+state prepareToStop {
+  traffic : red
+  pedestrian : red
+}
+
+prepareToGo --> go : NEXT
+go --> waitingToStop : STOP / NEXT
+waitingToStop --> prepareToStop : NEXT
+prepareToStop --> stop : NEXT
+stop --> prepareToGo : NEXT
+
+@enduml
+

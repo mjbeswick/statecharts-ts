@@ -1,0 +1,29 @@
+@startuml Alarm Clock State Machine
+
+[*] --> normal
+
+state normal {
+  state timeDisplay {
+    [*] --> showingTime
+    showingTime --> settingTime : SET_BUTTON_PRESSED
+    settingTime --> showingTime : SAVE_TIME_SETTINGS
+  }
+
+  state alarmSystem {
+    [*] --> alarmArmed
+    alarmArmed --> alarmRinging : ALARM_TIME_REACHED
+    alarmRinging --> alarmSnoozed : SNOOZE_BUTTON_PRESSED
+    alarmRinging --> alarmOff : TURN_OFF_ALARM
+    alarmSnoozed --> alarmRinging : SNOOZE_EXPIRED
+    alarmOff --> alarmArmed : DISABLE_ALARM
+  }
+}
+
+state setting {
+}
+
+normal --> setting : SET_BUTTON_PRESSED
+setting --> normal : EXIT_SETTING
+setting --> normal : SAVE_ALARM_SETTINGS
+
+@enduml
