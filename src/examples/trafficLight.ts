@@ -33,12 +33,15 @@ type TrafficLightContext = typeof trafficLightContext;
 // Define state transitions for the traffic light
 const trafficLightTransitions: TransitionMap<TrafficLightState, TrafficLightEvent, TrafficLightContext> = {
     stop: {
-        onEntry: ({ context, send }) => {
+        onEntry: ({ context }) => {
             Object.assign(context, {
                 traffic: { red: true, amber: false, green: false },
                 pedestrian: { red: false, green: true },
             });
-            setTimeout(() => send({ type: 'NEXT' }), context.timeoutPeriods.stop);
+        },
+        onTimeout: {
+            delay: (context) => context.timeoutPeriods.stop,
+            action: ({ send }) => send({ type: 'NEXT' }),
         },
         transitions: {
             NEXT: { target: 'prepareToGo' },
@@ -46,12 +49,15 @@ const trafficLightTransitions: TransitionMap<TrafficLightState, TrafficLightEven
     },
     prepareToGo: {
         isInitial: true,
-        onEntry: ({ context, send }) => {
+        onEntry: ({ context }) => {
             Object.assign(context, {
                 traffic: { red: true, amber: true, green: false },
                 pedestrian: { red: true, green: false },
             });
-            setTimeout(() => send({ type: 'NEXT' }), context.timeoutPeriods.prepareToGo);
+        },
+        onTimeout: {
+            delay: (context) => context.timeoutPeriods.prepareToGo,
+            action: ({ send }) => send({ type: 'NEXT' }),
         },
         transitions: {
             NEXT: { target: 'go' },
@@ -70,24 +76,30 @@ const trafficLightTransitions: TransitionMap<TrafficLightState, TrafficLightEven
         },
     },
     waitingToStop: {
-        onEntry: ({ context, send }) => {
+        onEntry: ({ context }) => {
             Object.assign(context, {
                 traffic: { red: false, amber: true, green: false },
                 pedestrian: { red: true, green: false },
             });
-            setTimeout(() => send({ type: 'NEXT' }), context.timeoutPeriods.readyToStop);
+        },
+        onTimeout: {
+            delay: (context) => context.timeoutPeriods.readyToStop,
+            action: ({ send }) => send({ type: 'NEXT' }),
         },
         transitions: {
             NEXT: { target: 'prepareToStop' },
         },
     },
     prepareToStop: {
-        onEntry: ({ context, send }) => {
+        onEntry: ({ context }) => {
             Object.assign(context, {
                 traffic: { red: true, amber: false, green: false },
                 pedestrian: { red: true, green: false },
             });
-            setTimeout(() => send({ type: 'NEXT' }), context.timeoutPeriods.stop);
+        },
+        onTimeout: {
+            delay: (context) => context.timeoutPeriods.stop,
+            action: ({ send }) => send({ type: 'NEXT' }),
         },
         transitions: {
             NEXT: { target: 'stop' },
