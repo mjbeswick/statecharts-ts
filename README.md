@@ -104,11 +104,23 @@ trafficLightMachine.subscribe((state, context) => {
 
 Creates a state machine with the given configuration.
 
-- **Parameters:**
-  - `config` (Object): The configuration object for the state machine.
-    - `context` (C): The context object for the state machine.
-    - `states` (TransitionMap<S, E, C>): A map of state definitions and transitions.
+```typescript
+function createStateMachine<S extends string, E extends { type: string }, C>(
+  config: {
+    context: C;
+    states: TransitionMap<S, E, C>;
+  }
+): StateMachine<S, E, C>
+```
 
+- **Type Parameters:**
+  - `S`: The type of states in the machine.
+  - `E`: The type of events that can trigger transitions.
+  - `C`: The type of the context object.
+- **Parameters:**
+  - `config`: The configuration object for the state machine.
+    - `context`: The initial context object for the state machine.
+    - `states`: A map of state definitions and transitions.
 - **Returns:** An object with the following methods:
   - `getState()`: Returns the current state of the machine.
   - `getContext()`: Returns the current context of the machine.
@@ -122,38 +134,77 @@ Creates a state machine with the given configuration.
 
 #### `StateTransition<S, E, C, T>`
 
-Defines the possible transitions from a state, including optional guard conditions and actions.
+Represents a state transition in the state machine.
 
-#### `NestedState<S, E, C>`
+```typescript
+type StateTransition<S extends string, E extends { type: string }, C, T extends E['type']> = {
+  target: S;
+  guard?: (params: { context: C; event: Extract<E, { type: T }> }) => boolean;
+  action?: (params: { context: C; event: Extract<E, { type: T }>, send: (event: E) => void }) => (() => void) | void; 
+}
+```
 
-Represents a nested state configuration, which can be compound or parallel.
+- **Type Parameters:**
+  - `S`: The type of states in the machine.
+  - `E`: The type of events that can trigger transitions.
+  - `C`: The type of the context object.
+  - `T`: The specific event type for this transition.
+
 
 #### `StateDefinition<S, E, C>`
 
-Describes a state, including entry and exit actions, timeouts, and transitions.
+Defines the structure of a state in the state machine.
 
-- Properties:
-  - `isInitial`: Indicates if the state is an initial state.
-  - `isParallel`: Indicates if the state contains parallel sub-states.
-  - `onEntry`: A function executed when entering the state.
-  - `onExit`: A function executed when exiting the state.
-  - `onTimeout`: Defines a timeout action and delay for the state.
-  - `transitions`: A map of events to transitions.
-  - `states`: Nested states (for compound or parallel states).
+```typescript
+type StateDefinition<S extends string, E extends { type: string }, C> = {
+  // ... existing properties ...
+}
+```
+
+- **Type Parameters:**
+  - `S`: The type of states in the machine.
+  - `E`: The type of events that can trigger transitions.
+  - `C`: The type of the context object.
 
 #### `TransitionMap<S, E, C>`
 
-A map of state names to their corresponding `StateDefinition`.
+Represents the transition map for the state machine.
+
+```typescript
+type TransitionMap<S extends string, E extends { type: string }, C> = {
+  [state in S]?: StateDefinition<S, E, C>;
+}
+```
+
+- **Type Parameters:**
+  - `S`: The type of states in the machine.
+  - `E`: The type of events that can trigger transitions.
+  - `C`: The type of the context object.
 
 ### Helper Functions
 
 #### `initializeState<S, E, C>(states: TransitionMap<S, E, C>): FlattenedState<S>`
 
-Determines the initial state(s) of the state machine based on the `isInitial` property.
+Initializes the state machine by determining the initial state(s).
+
+- **Type Parameters:**
+  - `S`: The type of states in the machine.
+  - `E`: The type of events that can trigger transitions.
+  - `C`: The type of the context object.
+- **Parameters:**
+  - `states`: The transition map defining the states of the machine.
+- **Returns:** The initial state or states.
+- **Throws:** An error if no initial state is defined.
 
 #### `flattenState<S>(state: FlattenedState<S>): S[]`
 
-Flattens a potentially nested state structure into an array of state names.
+Flattens a potentially nested state into an array of string states.
+
+- **Type Parameters:**
+  - `S`: The type of states in the machine.
+- **Parameters:**
+  - `state`: The state or array of states to flatten.
+- **Returns:** An array of flattened states.
 
 ### Parallel States
 
