@@ -80,10 +80,10 @@ export function createStateMachine<
     states: TransitionMap<S, E, C>;
 }) {
     let currentState: FlattenedState<S> = initializeState(config.states);
-    let context = config.context;
+    let context = structuredClone(config.context);
     let exitFn: (() => void) | undefined = undefined;
     const subscribers: Array<(state: S, context: C) => void> = [];
-    let timeoutIds: { [state: string]: NodeJS.Timeout } = {};
+    let timeoutIds: { [state: string]: ReturnType<typeof setTimeout> } = {};
 
     /**
      * Starts the state machine by entering the initial state(s).
@@ -207,7 +207,7 @@ export function createStateMachine<
             const delay = stateDef.onTimeout.delay(context);
             timeoutIds[state] = setTimeout(() => {
                 stateDef.onTimeout!.action({ context, state, send });
-            }, delay);
+            }, delay) as unknown as NodeJS.Timeout;
         }
     }
 
@@ -246,6 +246,16 @@ export function createStateMachine<
         const data = JSON.parse(json);
         currentState = data.state;
         context = data.context;
+    }
+
+    /**
+     * Notifies all subscribers of the current state and context.
+     */
+    function notifySubscribers() {
+        const flattenedStates = flattenState(currentState);
+        flattenedStates.forEach(state => {
+            subscribers.forEach(callback => callback(state, context));
+        });
     }
 
     return {
@@ -298,3 +308,9 @@ function flattenState<S extends string>(state: FlattenedState<S>): S[] {
     }
     return state.flatMap(s => flattenState<S>(s));
 }
+
+/**
+ * Represents a state or an array of states in the state machine.
+ * @template S - The type of states in the machine.
+ */
+type FlattenedState<S extends string> = S | S[];
