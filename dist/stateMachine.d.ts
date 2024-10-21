@@ -1,3 +1,10 @@
+/**
+ * Represents a state transition in the state machine.
+ * @template S - The type of states in the machine.
+ * @template E - The type of events that can trigger transitions.
+ * @template C - The type of the context object.
+ * @template T - The specific event type for this transition.
+ */
 export type StateTransition<S extends string, E extends {
     type: string;
 }, C, T extends E['type']> = {
@@ -31,6 +38,12 @@ export type StateTransition<S extends string, E extends {
         send: (event: E) => void;
     }) => (() => void) | void;
 }>;
+/**
+ * Represents a nested state in the state machine.
+ * @template S - The type of states in the machine.
+ * @template E - The type of events that can trigger transitions.
+ * @template C - The type of the context object.
+ */
 export type NestedState<S extends string, E extends {
     type: string;
 }, C> = {
@@ -39,6 +52,12 @@ export type NestedState<S extends string, E extends {
         [key: string]: StateDefinition<S, E, C>;
     };
 };
+/**
+ * Defines the structure of a state in the state machine.
+ * @template S - The type of states in the machine.
+ * @template E - The type of events that can trigger transitions.
+ * @template C - The type of the context object.
+ */
 export type StateDefinition<S extends string, E extends {
     type: string;
 }, C> = {
@@ -69,11 +88,25 @@ export type StateDefinition<S extends string, E extends {
         [key: string]: StateDefinition<S, E, C>;
     };
 };
+/**
+ * Represents the transition map for the state machine.
+ * @template S - The type of states in the machine.
+ * @template E - The type of events that can trigger transitions.
+ * @template C - The type of the context object.
+ */
 export type TransitionMap<S extends string, E extends {
     type: string;
 }, C> = {
     [K in S]?: StateDefinition<S, E, C>;
 };
+/**
+ * Creates a state machine with the given configuration.
+ * @template S - The type of states in the machine.
+ * @template E - The type of events that can trigger transitions.
+ * @template C - The type of the context object.
+ * @param config - The configuration object for the state machine.
+ * @returns An object with methods to interact with the state machine.
+ */
 export declare function createStateMachine<S extends string, E extends {
     type: string;
 }, C>(config: {
@@ -88,5 +121,9 @@ export declare function createStateMachine<S extends string, E extends {
     fromJSON: (json: string) => void;
     start: () => void;
 };
+/**
+ * Represents a state or an array of states in the state machine.
+ * @template S - The type of states in the machine.
+ */
 type FlattenedState<S extends string> = S | S[];
 export {};

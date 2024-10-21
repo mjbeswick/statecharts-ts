@@ -43,7 +43,7 @@ const trafficLightTransitions: TransitionMap<TrafficLightState, TrafficLightEven
             delay: (context) => context.timeoutPeriods.stop,
             action: ({ send }) => send({ type: 'NEXT' }),
         },
-        transitions: {
+        on: {
             NEXT: { target: 'prepareToGo' },
         }
     },
@@ -59,7 +59,7 @@ const trafficLightTransitions: TransitionMap<TrafficLightState, TrafficLightEven
             delay: (context) => context.timeoutPeriods.prepareToGo,
             action: ({ send }) => send({ type: 'NEXT' }),
         },
-        transitions: {
+        on: {
             NEXT: { target: 'go' },
         },
     },
@@ -70,7 +70,7 @@ const trafficLightTransitions: TransitionMap<TrafficLightState, TrafficLightEven
                 pedestrian: { red: true, green: false },
             });
         },
-        transitions: {
+        on: {
             STOP: { target: 'waitingToStop' },
             NEXT: { target: 'waitingToStop' },
         },
@@ -86,7 +86,7 @@ const trafficLightTransitions: TransitionMap<TrafficLightState, TrafficLightEven
             delay: (context) => context.timeoutPeriods.readyToStop,
             action: ({ send }) => send({ type: 'NEXT' }),
         },
-        transitions: {
+        on: {
             NEXT: { target: 'prepareToStop' },
         },
     },
@@ -101,7 +101,7 @@ const trafficLightTransitions: TransitionMap<TrafficLightState, TrafficLightEven
             delay: (context) => context.timeoutPeriods.stop,
             action: ({ send }) => send({ type: 'NEXT' }),
         },
-        transitions: {
+        on: {
             NEXT: { target: 'stop' },
         },
     },

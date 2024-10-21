@@ -32,12 +32,12 @@ const alarmClockConfig: TransitionMap<AlarmClockState, AlarmClockEvent, AlarmClo
                 states: {
                     showingTime: {
                         isInitial: true,
-                        transitions: {
+                        on: {
                             SET_BUTTON_PRESSED: { target: 'setting' }
                         }
                     },
                     settingTime: {
-                        transitions: {
+                        on: {
                             SAVE_TIME_SETTINGS: { target: 'showingTime' }
                         }
                     }
@@ -47,23 +47,23 @@ const alarmClockConfig: TransitionMap<AlarmClockState, AlarmClockEvent, AlarmClo
                 states: {
                     alarmArmed: {
                         isInitial: true,
-                        transitions: {
+                        on: {
                             ALARM_TIME_REACHED: { target: 'alarmRinging' }
                         }
                     },
                     alarmRinging: {
-                        transitions: {
+                        on: {
                             SNOOZE_BUTTON_PRESSED: { target: 'alarmSnoozed' },
                             TURN_OFF_ALARM: { target: 'alarmOff' }
                         }
                     },
                     alarmSnoozed: {
-                        transitions: {
+                        on: {
                             SNOOZE_EXPIRED: { target: 'alarmRinging' }
                         }
                     },
                     alarmOff: {
-                        transitions: {
+                        on: {
                             DISABLE_ALARM: { target: 'alarmArmed' as AlarmClockState }
                         }
                     }
@@ -72,7 +72,7 @@ const alarmClockConfig: TransitionMap<AlarmClockState, AlarmClockEvent, AlarmClo
         }
     },
     setting: {
-        transitions: {
+        on: {
             EXIT_SETTING: { target: 'normal' },
             SAVE_ALARM_SETTINGS: { target: 'normal', action: ({ context }) => { context.isAlarmArmed = true; } }
         }

@@ -45,7 +45,7 @@ export type StateDefinition<S extends string, E extends { type: string }, C> = {
         delay: (context: C) => number;
         action: (params: { context: C; state: S; send: (event: E) => void }) => void;
     };
-    transitions?: {
+    on?: {
         [T in E['type']]?: StateTransition<S, E, C, T>;
     };
     states?: {
@@ -149,7 +149,7 @@ export function createStateMachine<
         const stateDef = config.states[state];
         if (stateDef) {
             clearStateTimeout(state);
-            const transitions = stateDef.transitions;
+            const transitions = stateDef.on;
             const transition = transitions?.[event.type as E['type']];
             if (transition) {
                 processTransition(transition, event);
