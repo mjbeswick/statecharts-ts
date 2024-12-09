@@ -11,10 +11,8 @@ const machine = createMachine({
     },
   },
   on: {
-    STOP: ({ context, updateContext }) => {
-      if (!context.waiting) {
-        updateContext((c) => ({ ...c, waiting: true }));
-      }
+    STOP: ({ setContext }) => {
+      setContext('waiting', true);
     },
   },
   initial: 'go',

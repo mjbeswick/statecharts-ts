@@ -8,12 +8,16 @@ import {
 
 import { Machine } from './Machine';
 
-export type StateNode<E extends MachineEvent, C extends object> = {
+export type StateNode<
+  E extends MachineEvent,
+  C extends object,
+  S extends string,
+> = {
   id?: string;
   context: C;
   initial?: string;
   final?: string;
-  states: Record<string, Partial<StateNode<E, C>>>;
+  states: Record<S, Partial<StateNode<E, C, S>>>;
   onEntry?: EntryAction<C>;
   onExit?: ExitAction<C>;
   on?: {
@@ -25,15 +29,16 @@ export type StateNode<E extends MachineEvent, C extends object> = {
 type CoerceStateNode<
   E extends MachineEvent,
   C extends object,
-  T extends StateNode<E, C>,
+  T extends StateNode<E, C, S>,
+  S extends string,
 > = {
   id?: string;
   context: C;
   initial?: keyof T['states'];
   final?: keyof T['states'];
   states?: {
-    [K in keyof T['states']]: T['states'][K] extends StateNode<E, C>
-      ? CoerceStateNode<E, C, T['states'][K]>
+    [K in keyof T['states']]: T['states'][K] extends StateNode<E, C, S>
+      ? CoerceStateNode<E, C, T['states'][K], S>
       : T['states'][K];
   };
   onEntry?: EntryAction<C>;
@@ -47,14 +52,16 @@ type CoerceStateNode<
 export type ValidateStateNode<
   E extends MachineEvent,
   C extends object,
-  T extends StateNode<E, C>,
-> = T extends never ? T : CoerceStateNode<E, C, T>;
+  T extends StateNode<E, C, S>,
+  S extends string,
+> = T extends never ? T : CoerceStateNode<E, C, T, S>;
 
 export function createMachine<
   C extends object,
   E extends MachineEvent,
-  T extends StateNode<E, C>,
->(config: ValidateStateNode<E, C, T>) {
+  T extends StateNode<E, C, S>,
+  S extends string,
+>(config: ValidateStateNode<E, C, T, S>) {
   const machine = new Machine(config);
 
   return machine;

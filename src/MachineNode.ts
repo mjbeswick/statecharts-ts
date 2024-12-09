@@ -123,6 +123,8 @@ export class MachineNode<E extends MachineEvent, C extends object> {
   #history?: 'shallow' | 'deep';
   #id: string;
 
+  events: E = {} as E;
+
   onEntry?: EntryAction<C>;
   onExit?: ExitAction<C>;
   onFinal?: FinalAction<C>;

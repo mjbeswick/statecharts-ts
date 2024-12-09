@@ -1,31 +1,45 @@
 import { createMachine } from '../src/createMachine';
+import { generateId } from '../src/lib/generateId';
 import { invariant } from '../src/lib/invariant';
-import { nanoid } from 'nanoid';
 
-async function mockFetchToken(credentials: {
+const MOCK_DELAY = 1000; // 1 second
+const TOKEN_EXPIRY = 1000 * 60 * 60 * 24; // 24 hours
+
+type TokenResponse = {
+  accessToken: string;
+  refreshToken: string;
+  expiresAt: number;
+};
+
+type Credentials = {
   username: string;
   password: string;
-}) {
+};
+
+async function mockFetchToken(
+  credentials: Credentials,
+): Promise<TokenResponse> {
   invariant(credentials.username, 'Invalid username');
   invariant(credentials.password, 'Invalid password');
 
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  await new Promise((resolve) => setTimeout(resolve, MOCK_DELAY));
+
   return {
-    accessToken: nanoid(),
-    refreshToken: nanoid(),
-    expiresAt: Date.now() + 1000 * 60 * 60 * 24,
+    accessToken: generateId(),
+    refreshToken: generateId(),
+    expiresAt: Date.now() + TOKEN_EXPIRY,
   };
 }
 
-async function mockRefreshToken(refreshToken: string) {
+async function mockRefreshToken(refreshToken: string): Promise<TokenResponse> {
   invariant(refreshToken, 'Invalid refresh token');
 
-  await new Promise((resolve) => setTimeout(resolve, 1000));
+  await new Promise((resolve) => setTimeout(resolve, MOCK_DELAY));
 
   return {
-    accessToken: nanoid(),
-    refreshToken: nanoid(),
-    expiresAt: Date.now() + 1000 * 60 * 60 * 24,
+    accessToken: generateId(),
+    refreshToken: generateId(),
+    expiresAt: Date.now() + TOKEN_EXPIRY,
   };
 }
 
@@ -39,11 +53,6 @@ type Token = {
   accessToken: string;
   refreshToken: string;
   expiresAt: number;
-};
-
-type Credentials = {
-  username: string;
-  password: string;
 };
 
 const machine = createMachine({
@@ -132,3 +141,8 @@ machine.subscribe((state) => {
 });
 
 machine.start();
+
+machine.dispatch({
+  type: 'AUTHENTICATE',
+  data: { username: 'test', password: 'test' },
+});

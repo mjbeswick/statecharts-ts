@@ -13,10 +13,8 @@ const machine = new MachineNode({
     },
   },
   on: {
-    STOP: ({ context, updateContext }) => {
-      if (!context.waiting) {
-        updateContext((c) => ({ ...c, waiting: true }));
-      }
+    STOP: ({ setContext }) => {
+      setContext('waiting', true);
     },
   },
 });

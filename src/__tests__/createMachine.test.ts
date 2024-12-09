@@ -26,8 +26,10 @@ describe('createMachine', () => {
       },
     });
 
+    machine.start();
+
     expect(machine).toBeDefined();
-    // expect(machine.value).toBe('idle');
+    expect(machine.getActive().idle).toBe(true);
   });
 
   it('should transition states based on events', () => {
